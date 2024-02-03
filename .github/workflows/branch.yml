@@ -13,7 +13,7 @@ jobs:
       with:
         pipinstall: "."
     - uses: wtnb75/actions/flake8@main
-    #- uses: wtnb75/actions/pytest@main
+    - uses: wtnb75/actions/pytest@main
     - uses: wtnb75/actions/wheel@main
     - uses: wtnb75/actions/merge-pages@main
       with:
