@@ -18,7 +18,7 @@ jobs:
     - uses: wtnb75/actions/merge-pages@main
       with:
         dirs: cover
-        pydist: dist
+        #pydist: dist
     - uses: wtnb75/actions/docker@main
       with:
         push: 'true'
