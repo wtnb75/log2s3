@@ -6,3 +6,5 @@ tmp/
 *.egg-info/
 dist/
 build/
+cover
+.coverage
