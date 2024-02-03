@@ -1,6 +1,6 @@
 FROM python:3-alpine AS build
 COPY ./ /app
-RUN cd /app && pip install build && python -m build
+RUN cd /app && pip install build && python -m build -w
 
 FROM python:3-alpine
 ENV PYTHONDONTWRITEBYTECODE=1
