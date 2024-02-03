@@ -1,8 +1,8 @@
-name: branch
+name: main
 
 on:
   push:
-    branches-ignore: [main, gh-pages]
+    branches: [main]
 
 jobs:
   build:
@@ -19,6 +19,12 @@ jobs:
       with:
         dirs: cover
         #pydist: dist
+    - name: deploy to gh-pages
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./publish
+        force_orphan: true
     - uses: wtnb75/actions/docker@main
       with:
         push: 'true'
