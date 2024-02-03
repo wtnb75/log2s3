@@ -1,0 +1,27 @@
+name: branch
+
+on:
+  push:
+    branches-ignore: [main, gh-pages]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+    - uses: wtnb75/actions/python@main
+      with:
+        pipinstall: "."
+    - uses: wtnb75/actions/flake8@main
+    #- uses: wtnb75/actions/pytest@main
+    - uses: wtnb75/actions/wheel@main
+    - uses: wtnb75/actions/merge-pages@main
+      with:
+        dirs: cover
+        pydist: dist
+    - uses: wtnb75/actions/docker@main
+      with:
+        push: 'true'
+        context: .
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
