@@ -1,8 +1,12 @@
 from logging import getLogger
+import os
+import sys
+import subprocess
 import functools
 import click
 import pathlib
 import boto3
+import editor
 from .version import VERSION
 from .compr import compress_modes
 
@@ -210,7 +214,7 @@ def filetree_delete(top: pathlib.Path, config: dict):
 @click.option("--prefix", default='', help="AWS S3 Object Prefix")
 @filetree_option
 @verbose_option
-def s3_put(s3: boto3.client, bucket_name: str, prefix: str, top: pathlib.Path, config: dict):
+def s3_put_tree(s3: boto3.client, bucket_name: str, prefix: str, top: pathlib.Path, config: dict):
     config["s3"] = s3
     config["s3_bucket"] = bucket_name
     config["s3_prefix"] = prefix
@@ -218,6 +222,98 @@ def s3_put(s3: boto3.client, bucket_name: str, prefix: str, top: pathlib.Path, c
     from .processor import S3Processor, process_walk
     proc = [S3Processor(config)]
     process_walk(top, proc)
+
+
+def _s3_read(s3: boto3.client, bucket_name: str, key: str) -> bytes:
+    from .compr import auto_compress, do_chain
+    _, data = auto_compress(pathlib.Path(key), "decompress")
+    res = s3.get_object(Bucket=bucket_name, Key=key)
+    data[0] = res["Body"].read
+    return do_chain(data)
+
+
+@cli.command()
+@s3_option
+@click.argument("key")
+@verbose_option
+def s3_cat(s3: boto3.client, bucket_name: str, key):
+    sys.stdout.buffer.write(_s3_read(s3, bucket_name, key))
+
+
+@cli.command()
+@s3_option
+@click.argument("key")
+@click.option("--pager", envvar="PAGER", default="less")
+@verbose_option
+def s3_less(s3: boto3.client, bucket_name: str, key: str, pager: str):
+    subprocess.run([pager], input=_s3_read(s3, bucket_name, key))
+
+
+@cli.command()
+@s3_option
+@click.argument("key")
+@click.option("--dry/--wet", help="dry run or wet run", default=False, show_default=True)
+@verbose_option
+def s3_vi(s3: boto3.client, bucket_name: str, key: str, dry):
+    bindata = _s3_read(s3, bucket_name, key).decode("utf-8")
+    from .compr import extcmp_map
+    _, ext = os.path.splitext(key)
+    if ext in extcmp_map:
+        compress_fn = extcmp_map[ext][2]
+    newdata = editor.editor(text=bindata)
+    if newdata != bindata:
+        wr = compress_fn(newdata.encode("utf-8"))
+        if dry:
+            _log.info("(dry) changed. write back to %s (%d->%d(%d))", key, len(bindata), len(newdata), len(wr))
+        else:
+            _log.info("(wet) changed. write back to %s (%d->%d(%d))", key, len(bindata), len(newdata), len(wr))
+            s3.put_object(Body=wr, Bucket=bucket_name, Key=key)
+    else:
+        _log.info("not changed")
+
+
+@cli.command("cat")
+@click.argument("filename", type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True))
+@verbose_option
+def cat_file(filename: str):
+    from .compr import auto_compress, do_chain
+    _, data = auto_compress(pathlib.Path(filename), "decompress")
+    sys.stdout.buffer.write(do_chain(data))
+
+
+@cli.command("less")
+@click.argument("filename", type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True))
+@click.option("--pager", envvar="PAGER", default="less")
+@verbose_option
+def view_file(filename: str, pager):
+    from .compr import auto_compress, do_chain
+    _, data = auto_compress(pathlib.Path(filename), "decompress")
+    bindata = do_chain(data)
+    subprocess.run([pager], input=bindata)
+
+
+@cli.command("vi")
+@click.argument("filename", type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True))
+@click.option("--dry/--wet", help="dry run or wet run", default=False, show_default=True)
+@verbose_option
+def edit_file(filename: str, dry):
+    from .compr import auto_compress, do_chain, extcmp_map
+    fname = pathlib.Path(filename)
+    _, data = auto_compress(fname, "decompress")
+    _, ext = os.path.splitext(fname)
+    if ext in extcmp_map:
+        compress_fn = extcmp_map[ext][2]
+    bindata = do_chain(data).decode('utf-8')
+    newdata = editor.editor(text=bindata)
+    if newdata != bindata:
+        if dry:
+            _log.info("(dry) changed. write back to %s", fname)
+        else:
+            _log.info("(wet) changed. write back to %s", fname)
+            # mode, timestamp will be changed
+            fname.write_bytes(compress_fn(newdata))
+    else:
+        _log.info("not changed")
 
 
 if __name__ == "__main__":
