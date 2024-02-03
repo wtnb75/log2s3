@@ -4,6 +4,7 @@ import click
 import pathlib
 import boto3
 from .version import VERSION
+from .compr import have_lz4, have_zstd
 
 _log = getLogger(__name__)
 
@@ -25,8 +26,8 @@ def s3_option(func):
     @click.option("--dotenv/--no-dotenv", default=False, help="load .env for S3 client config")
     @functools.wraps(func)
     def _(s3_endpoint, s3_access_key, s3_secret_key, s3_region, s3_bucket, dotenv, **kwargs):
-        from dotenv import load_dotenv
         if dotenv:
+            from dotenv import load_dotenv
             load_dotenv()
         args = {
             'aws_access_key_id': s3_access_key,
@@ -42,6 +43,13 @@ def s3_option(func):
     return _
 
 
+compress_choice = ["gzip", "bzip2", "lzma", "xz", "decompress", "raw"]
+if have_lz4:
+    compress_choice.append("lz4")
+if have_zstd:
+    compress_choice.append("zstd")
+
+
 def filetree_option(func):
     @click.option("--top", type=click.Path(dir_okay=True, exists=True, file_okay=False), required=True,
                   help="root directory to find files")
@@ -50,7 +58,7 @@ def filetree_option(func):
     @click.option("--bigger", help="find bigger file")
     @click.option("--smaller", help="find smaller file")
     @click.option("--dry/--wet", help="dry run or wet run", default=False, show_default=True)
-    @click.option("--compress", default="gzip", type=click.Choice(["gzip", "bzip2", "lzma", "xz", "decompress", "raw"]),
+    @click.option("--compress", default="gzip", type=click.Choice(compress_choice),
                   help="compress type", show_default=True)
     @functools.wraps(func)
     def _(top, older, newer, bigger, smaller, dry, compress, **kwargs):
