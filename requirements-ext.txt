@@ -1,2 +1,4 @@
 zstd
 lz4
+Brotli
+pyliblzfse
