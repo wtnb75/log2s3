@@ -4,16 +4,36 @@ from functools import partial
 import gzip
 import bz2
 import lzma
+modecmp_map = {
+    "gzip": (".gz", gzip.decompress, gzip.compress),
+    "bzip2": (".bz2", bz2.decompress, bz2.compress),
+    "xz": (".xz", partial(lzma.decompress, format=lzma.FORMAT_AUTO),
+           partial(lzma.compress, format=lzma.FORMAT_XZ)),
+    "lzma": (".lzma", partial(lzma.decompress, format=lzma.FORMAT_AUTO),
+             partial(lzma.compress, format=lzma.FORMAT_ALONE)),
+}
 try:
     import zstd
-    have_zstd = True
+    modecmp_map["zstd"] = (".zstd", zstd.decompress, zstd.compress)
 except ImportError:
-    have_zstd = False
+    pass
 try:
     import lz4.frame
-    have_lz4 = True
+    modecmp_map["lz4"] = (".lz4", lz4.frame.decompress, lz4.frame.compress)
 except ImportError:
-    have_lz4 = False
+    pass
+try:
+    import brotli
+    modecmp_map["brotli"] = (".br", brotli.decompress, brotli.compress)
+except ImportError:
+    pass
+try:
+    import liblzfse
+    modecmp_map["lzfse"] = (".lzfse", liblzfse.decompress, liblzfse.compress)
+except ImportError:
+    pass
+extcmp_map = {v[0]: (k, *v[1:]) for k, v in modecmp_map.items()}
+compress_modes = list(modecmp_map.keys()) + ["decompress", "raw"]
 
 
 def do_chain(funcs: list[callable]) -> bytes:
@@ -32,52 +52,17 @@ def auto_compress(fname: pathlib.Path, mode: str = None) -> tuple[os.PathLike, l
     if mode == "raw":
         base = base + ext
         ext = ""
-    elif ext == ".gz":
-        if mode == "gzip":
+    elif ext in extcmp_map:
+        if mode == extcmp_map[ext][0]:
             return fname, resfn
-        resfn.append(gzip.decompress)
-    elif ext == ".bz2":
-        if mode == "bzip2":
-            return fname, resfn
-        resfn.append(bz2.decompress)
-    elif ext == ".xz":
-        if mode == "xz":
-            return fname, resfn
-        resfn.append(partial(lzma.decompress, format=lzma.FORMAT_AUTO))
-    elif ext == ".lzma":
-        if mode == "lzma":
-            return fname, resfn
-        resfn.append(partial(lzma.decompress, format=lzma.FORMAT_AUTO))
-    elif ext == ".zstd" and have_zstd:
-        if mode == "zstd":
-            return fname, resfn
-        resfn.append(zstd.decompress)
-    elif ext == ".lz4" and have_zstd:
-        if mode == "lz4":
-            return fname, resfn
-        resfn.append(lz4.frame.decompress)
+        resfn.append(extcmp_map[ext][1])
     else:
         base = base + ext
         ext = ""
 
-    if mode == "gzip":
-        resfn.append(gzip.compress)
-        return base+".gz", resfn
-    elif mode == "bzip2":
-        resfn.append(bz2.compress)
-        return base+".bz2", resfn
-    elif mode == "xz":
-        resfn.append(partial(lzma.compress, format=lzma.FORMAT_XZ))
-        return base+".xz", resfn
-    elif mode == "lzma":
-        resfn.append(partial(lzma.compress, format=lzma.FORMAT_ALONE))
-        return base+".lzma", resfn
-    elif mode == "zstd" and have_zstd:
-        resfn.append(zstd.compress)
-        return base+".zstd", resfn
-    elif mode == "lz4" and have_lz4:
-        resfn.append(lz4.frame.compress)
-        return base+".lz4", resfn
+    if mode in modecmp_map:
+        resfn.append(modecmp_map[mode][2])
+        return base+modecmp_map[mode][0], resfn
     elif mode == "decompress":
         return base, resfn
     else:
