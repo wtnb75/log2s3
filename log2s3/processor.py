@@ -1,15 +1,14 @@
 import os
 import pathlib
 import time
-import gzip
-import bz2
-import lzma
 import shutil
 from logging import getLogger
 from typing import Optional
 from abc import ABC, abstractmethod
+from .compr import auto_compress, do_chain
 import pytimeparse
 import humanfriendly
+
 
 _log = getLogger(__name__)
 
@@ -60,50 +59,6 @@ class DelProcessor(FileProcessor):
         return True
 
 
-def auto_compress(fname: pathlib.Path, mode: str = None) -> tuple[os.PathLike, bytes]:
-    if mode is None:
-        mode = "raw"
-    base, ext = os.path.splitext(fname)
-    rawdata = fname.read_bytes()
-    if mode == "raw":
-        bindata = rawdata
-        base = base + ext
-        ext = ""
-    elif ext == ".gz":
-        if mode == "gzip":
-            return fname, rawdata
-        bindata = gzip.decompress(rawdata)
-    elif ext == ".bz2":
-        if mode == "bzip2":
-            return fname, rawdata
-        bindata = bz2.decompress(rawdata)
-    elif ext == ".xz":
-        if mode == "xz":
-            return fname, rawdata
-        bindata = lzma.decompress(rawdata, lzma.FORMAT_AUTO)
-    elif ext == ".lzma":
-        if mode == "lzma":
-            return fname, rawdata
-        bindata = lzma.decompress(rawdata, lzma.FORMAT_AUTO)
-    else:
-        bindata = rawdata
-        base = base + ext
-        ext = ""
-
-    if mode == "gzip":
-        return base+".gz", gzip.compress(bindata)
-    elif mode == "bzip2":
-        return base+".bz2", bz2.compress(bindata),
-    elif mode == "xz":
-        return base+".xz", lzma.compress(bindata, lzma.FORMAT_XZ)
-    elif mode == "lzma":
-        return base+".lzma", lzma.compress(bindata, lzma.FORMAT_ALONE)
-    elif mode == "decompress":
-        return base, bindata
-    else:
-        return base + ext, rawdata
-
-
 class CompressProcessor(FileProcessor):
     def process(self, fname: pathlib.Path, stat: Optional[os.stat_result]) -> bool:
         compressor = self.config.get("compress", "gzip")
@@ -112,10 +67,15 @@ class CompressProcessor(FileProcessor):
         if newpath == fname:
             _log.debug("unchanged: fname=%s, stat=%s", fname, stat)
             return False
+        pfx = os.path.commonprefix([fname, newpath])
+        wr = do_chain(data)
         if self.config.get("dry", False):
-            _log.info("(dry) compress fname=%s->%s, size=%s->%s", fname, newpath, stat.st_size, len(data))
+            _log.info("(dry) compress fname=%s{%s->%s}, size=%s->%s", pfx, str(fname)[len(pfx):],
+                      str(newpath)[len(pfx):], stat.st_size, len(wr))
         else:
-            newpath.write_bytes(data)
+            _log.info("(wet) compress fname=%s{%s->%s}, size=%s->%s", pfx, str(fname)[len(pfx):],
+                      str(newpath)[len(pfx):], stat.st_size, len(wr))
+            newpath.write_bytes(wr)
             shutil.copystat(fname, newpath, follow_symlinks=False)
             fname.unlink()
         return True
@@ -138,11 +98,12 @@ class S3Processor(FileProcessor):
         if obj_name in self.skip_names:
             _log.info("already exists: %s", obj_name)
             return True
+        wr = do_chain(data)
         if self.config.get("dry", False):
-            _log.info("(dry) upload %s -> %s (%d->%d)", fname, obj_name, stat.st_size, len(data))
+            _log.info("(dry) upload %s -> %s (%d->%d)", fname, obj_name, stat.st_size, len(wr))
         else:
-            _log.info("upload %s -> %s (%d->%d)", fname, obj_name, stat.st_size, len(data))
-            self.s3.put_object(Body=data, Bucket=self.bucket, Key=obj_name)
+            _log.info("upload %s -> %s (%d->%d)", fname, obj_name, stat.st_size, len(wr))
+            self.s3.put_object(Body=wr, Bucket=self.bucket, Key=obj_name)
         return False
 
 
