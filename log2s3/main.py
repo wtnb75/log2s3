@@ -242,10 +242,9 @@ def s3_cat(s3: boto3.client, bucket_name: str, key):
 @cli.command()
 @s3_option
 @click.argument("key")
-@click.option("--pager", envvar="PAGER", default="less")
 @verbose_option
-def s3_less(s3: boto3.client, bucket_name: str, key: str, pager: str):
-    subprocess.run([pager], input=_s3_read(s3, bucket_name, key))
+def s3_less(s3: boto3.client, bucket_name: str, key: str):
+    click.echo_via_pager(_s3_read(s3, bucket_name, key).decode("utf-8"))
 
 
 @cli.command()
