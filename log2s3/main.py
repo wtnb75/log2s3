@@ -316,5 +316,17 @@ def edit_file(filename: str, dry):
         _log.info("not changed")
 
 
+@cli.command()
+@click.argument("args", nargs=-1)
+def sh(args):
+    subprocess.run(["sh"]+list(args))
+
+
+@cli.command()
+@click.argument("args", nargs=-1)
+def bash(args):
+    subprocess.run(["bash"]+list(args))
+
+
 if __name__ == "__main__":
     cli()
