@@ -6,7 +6,6 @@ import functools
 import click
 import pathlib
 import boto3
-import editor
 from .version import VERSION
 from .compr import compress_modes
 
@@ -260,8 +259,8 @@ def s3_vi(s3: boto3.client, bucket_name: str, key: str, dry):
     _, ext = os.path.splitext(key)
     if ext in extcmp_map:
         compress_fn = extcmp_map[ext][2]
-    newdata = editor.editor(text=bindata)
-    if newdata != bindata:
+    newdata = click.edit(text=bindata)
+    if newdata is not None and newdata != bindata:
         wr = compress_fn(newdata.encode("utf-8"))
         if dry:
             _log.info("(dry) changed. write back to %s (%d->%d(%d))", key, len(bindata), len(newdata), len(wr))
@@ -283,13 +282,12 @@ def cat_file(filename: str):
 
 @cli.command("less")
 @click.argument("filename", type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True))
-@click.option("--pager", envvar="PAGER", default="less")
 @verbose_option
-def view_file(filename: str, pager):
+def view_file(filename: str):
     from .compr import auto_compress, do_chain
     _, data = auto_compress(pathlib.Path(filename), "decompress")
     bindata = do_chain(data)
-    subprocess.run([pager], input=bindata)
+    click.echo_via_pager(bindata.decode("utf-8"))
 
 
 @cli.command("vi")
@@ -304,8 +302,8 @@ def edit_file(filename: str, dry):
     if ext in extcmp_map:
         compress_fn = extcmp_map[ext][2]
     bindata = do_chain(data).decode('utf-8')
-    newdata = editor.editor(text=bindata)
-    if newdata != bindata:
+    newdata = click.edit(text=bindata)
+    if newdata is not None and newdata != bindata:
         if dry:
             _log.info("(dry) changed. write back to %s", fname)
         else:
