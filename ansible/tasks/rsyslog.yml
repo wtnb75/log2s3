@@ -1,0 +1,28 @@
+- name: imtcp
+  lineinfile:
+    path: /etc/rsyslog.conf
+    regexp: 'module.*imtcp'
+    line: 'module(load="imtcp")'
+- name: imtcp port
+  lineinfile:
+    path: /etc/rsyslog.conf
+    regexp: 'input.*imtcp'
+    line: 'input(type="imtcp" port="514")'
+- name: config subdir
+  lineinfile:
+    path: /etc/rsyslog.conf
+    line: '$IncludeConfig /etc/rsyslog.d/*.conf'
+- name: directory
+  file:
+    path: /etc/rsyslog.d
+    owner: root
+    group: root
+    mode: '0755'
+    state: directory
+- name: container.conf
+  template:
+    src: rsyslog-container.conf
+    dest: /etc/rsyslog.d/10-container.conf
+    owner: root
+    group: root
+    mode: '0644'
