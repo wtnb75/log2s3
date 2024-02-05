@@ -1,0 +1,2 @@
+- include_tasks: docker.yml
+- include_tasks: rsyslog.yml
