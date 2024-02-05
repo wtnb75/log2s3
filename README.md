@@ -49,25 +49,25 @@ template(name="cmdcontainerfile" type="string" string="/var/log/container/run/%$
 
 ## install (pip)
 
-- pip install log2s3
-    - (optional) pip install zstd lz4 Brotli pyliblzfse
-- log2s3 [options]
+- `pip install log2s3`
+    - (optional) `pip install zstd lz4 Brotli pyliblzfse`
+- `log2s3 [options]`
 
 ## install (docker)
 
-- docker pull ghcr.io/wtnb75/log2s3
-- docker run -u $(id -u syslog):$(id -g syslog) -v /var/log/container:/var/log/container -w /w ghcr.io/wtnb75/log2s3 [options]
+- `docker pull ghcr.io/wtnb75/log2s3`
+- `docker run -u $(id -u syslog):$(id -g syslog) -v /var/log/container:/var/log/container -w /w ghcr.io/wtnb75/log2s3 [options]`
 
 # subcommands
 
 ## filetree
 
 - compress old/large log files
-    - log2s3 filetree-compress --top /var/log/container --older 2d --bigger 4k --compress gzip
+    - `log2s3 filetree-compress --top /var/log/container --older 2d --bigger 4k --compress gzip`
 - decompress all log files
-    - log2s3 filetree-compress --top /var/log/container --compress decompress
+    - `log2s3 filetree-compress --top /var/log/container --compress decompress`
 - remove old log files
-    - log2s3 filetree-delete --top /var/log/container --older 30d
+    - `log2s3 filetree-delete --top /var/log/container --older 30d`
 
 ## s3
 
@@ -75,37 +75,37 @@ option/environment variables
 
 | option | env name | description |
 |---|---|---|
-| --s3-access-key | AWS_ACCESS_KEY_ID | AWS Access Key |
-| --s3-secret-key | AWS_SECRET_ACCESS_KEY | AWS Secret Key |
-| --s3-region | AWS_DEFAULT_REGION |AWS Region |
-| --s3-endpoint | AWS_ENDPOINT_URL_S3 | AWS Endpoint URL for S3 |
-| --s3-bucket | AWS_S3_BUCKET | AWS S3 Bucket name |
-| --dotenv | | load .env for S3 client config |
-| --prefix | | object key prefix |
+| `--s3-access-key` | `AWS_ACCESS_KEY_ID` | AWS Access Key |
+| `--s3-secret-key` | `AWS_SECRET_ACCESS_KEY` | AWS Secret Key |
+| `--s3-region` | `AWS_DEFAULT_REGION` |AWS Region |
+| `--s3-endpoint` | `AWS_ENDPOINT_URL_S3` | AWS Endpoint URL for S3 |
+| `--s3-bucket` | `AWS_S3_BUCKET` | AWS S3 Bucket name |
+| `--dotenv` | | load .env for S3 client config |
+| `--prefix` | | object key prefix |
 
 - make bucket
-    - log2s3 s3-make-bucket --s3-bucket mytestbucket123
+    - `log2s3 s3-make-bucket --s3-bucket mytestbucket123`
 - list buckets
-    - log2s3 s3-bucket
+    - `log2s3 s3-bucket`
 - list objects
-    - log2s3 s3-list
+    - `log2s3 s3-list`
 - du
-    - log2s3 s3-du
+    - `log2s3 s3-du`
 - compress and upload to S3 object storage
-    - log2s3 s3-put-tree --top /var/log/container --prefix $(hostname -s)/ --older 7d --compress xz
+    - `log2s3 s3-put-tree --top /var/log/container --prefix $(hostname -s)/ --older 7d --compress xz`
 - remove by object key suffix
-    - log2s3 s3-delete-by-ext --prefix $(hostname -s)/ --suffix .gz
+    - `log2s3 s3-delete-by-ext --prefix $(hostname -s)/ --suffix .gz`
 
 ## cat/view/edit
 
 - local files
-    - log2s3 cat /path/to/file.gz
-    - log2s3 less /path/to/file.xz
-    - log2s3 vi /path/to/file.bz2
+    - `log2s3 cat /path/to/file.gz`
+    - `log2s3 less /path/to/file.xz`
+    - `log2s3 vi /path/to/file.bz2`
 - s3 objects
-    - log2s3 s3-cat path/to/file.gz
-    - log2s3 s3-less path/to/file.xz
-    - log2s3 s3-vi path/to/file.bz2
+    - `log2s3 s3-cat path/to/file.gz`
+    - `log2s3 s3-less path/to/file.xz`
+    - `log2s3 s3-vi path/to/file.bz2`
 
 # examples
 
