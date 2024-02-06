@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
 
+permissions:
+  packages: write
+  pages: write
+  id-token: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -19,12 +24,15 @@ jobs:
       with:
         dirs: cover
         #pydist: dist
-    - name: deploy to gh-pages
-      uses: peaceiris/actions-gh-pages@v3
+    - name: Setup Pages
+      uses: actions/configure-pages@v3
+    - name: upload pages
+      uses: actions/upload-pages-artifact@v1
       with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./publish
-        force_orphan: true
+        path: ./publish
+    - name: deploy pages
+      uses: actions/deploy-pages@v1
+      id: deployment
     - uses: wtnb75/actions/docker@main
       with:
         push: 'true'
