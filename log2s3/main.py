@@ -185,11 +185,11 @@ def s3_delete_by(s3: boto3.client, bucket_name: str, prefix: str, suffix: str, d
     # older
     if older:
         check = now - pytimeparse.parse(older)
-        to_del = [x for x in to_del if x["LastModified"] < check]
+        to_del = [x for x in to_del if x["LastModified"].timestamp() < check]
     # newer
     if newer:
         check = now - pytimeparse.parse(older)
-        to_del = [x for x in to_del if x["LastModified"] > check]
+        to_del = [x for x in to_del if x["LastModified"].timestamp() > check]
     # bigger
     if bigger:
         check = humanfriendly.parse_size(bigger)
@@ -202,10 +202,10 @@ def s3_delete_by(s3: boto3.client, bucket_name: str, prefix: str, suffix: str, d
     if len(del_keys) == 0:
         _log.info("no object found")
     elif dry:
-        _log.debug("remove objects: %s", del_keys)
-        click.echo(f"remove {len(del_keys)} objects")
+        _log.info("(dry)remove objects: %s", del_keys)
+        click.echo(f"(dry)remove {len(del_keys)} objects")
     else:
-        _log.info("remove %s objects", len(del_keys))
+        _log.info("(wet)remove %s objects", len(del_keys))
         s3.delete_objects(Bucket=bucket_name, Delete={"Objects": [{"Key": x} for x in del_keys]})
 
 
