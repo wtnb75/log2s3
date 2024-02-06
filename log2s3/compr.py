@@ -32,6 +32,37 @@ try:
     modecmp_map["lzfse"] = (".lzfse", liblzfse.decompress, liblzfse.compress)
 except ImportError:
     pass
+try:
+    import zopfli.gzip
+    modecmp_map["zopfli"] = ("", gzip.decompress, zopfli.gzip.compress)
+except ImportError:
+    pass
+try:
+    import snappy
+    modecmp_map["snappy"] = (".snappy", snappy.decompress, snappy.compress)
+except ImportError:
+    pass
+try:
+    import py_snappy
+    modecmp_map["py_snappy"] = ("", py_snappy.decompress, py_snappy.compress)
+except ImportError:
+    pass
+try:
+    import lzo
+    modecmp_map["lzo"] = (".lzo", lzo.decompress, lzo.compress)
+except ImportError:
+    pass
+try:
+    import zlib_ng.gzip_ng
+    modecmp_map["zlib-ng"] = ("", zlib_ng.gzip_ng.decompress, zlib_ng.gzip_ng.compress)
+except ImportError:
+    pass
+try:
+    import zpaq
+    modecmp_map["zpaq"] = (".zpaq", zpaq.decompress, zpaq.compress)
+except ImportError:
+    pass
+
 extcmp_map = {v[0]: (k, *v[1:]) for k, v in modecmp_map.items()}
 compress_modes = list(modecmp_map.keys()) + ["decompress", "raw"]
 
@@ -52,7 +83,7 @@ def auto_compress(fname: pathlib.Path, mode: str = None) -> tuple[os.PathLike, l
     if mode == "raw":
         base = base + ext
         ext = ""
-    elif ext in extcmp_map:
+    elif ext != "" and ext in extcmp_map:
         if mode == extcmp_map[ext][0]:
             return fname, resfn
         resfn.append(extcmp_map[ext][1])

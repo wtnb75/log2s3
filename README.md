@@ -50,7 +50,7 @@ template(name="cmdcontainerfile" type="string" string="/var/log/container/run/%$
 ## install (pip)
 
 - `pip install log2s3`
-    - (optional) `pip install zstd lz4 Brotli pyliblzfse`
+    - (optional) `pip install zstd lz4 Brotli pyliblzfse zopfli python-snappy python-lzo pyzpaq zlib-ng`
 - `log2s3 [options]`
 
 ## install (docker)
