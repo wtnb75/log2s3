@@ -2,3 +2,8 @@ zstd
 lz4
 Brotli
 pyliblzfse
+zopfli
+python-snappy
+python-lzo
+pyzpaq
+zlib-ng

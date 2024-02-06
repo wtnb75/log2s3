@@ -314,6 +314,47 @@ def edit_file(filename: str, dry):
 
 
 @cli.command()
+@click.argument("file")
+@click.option("--compress", default=None, type=click.Choice(compress_modes),
+              help="compress type", multiple=True)
+def compress_benchmark(compress, file):
+    import csv
+    import timeit
+    from .compr import modecmp_map
+    if not compress:
+        compress = compress_modes
+    input_data = pathlib.Path(file).read_bytes()
+
+    def bench_comp():
+        comp_fn(input_data)
+
+    def bench_decomp():
+        decomp_fn(compressed_data)
+
+    wr = csv.writer(sys.stdout)
+    wr.writerow(["mode", "rate", "compress", "decompress"])
+    for c in compress:
+        mode = c
+        m = modecmp_map.get(mode)
+        if not m:
+            click.Abort(f"no such compress mode: {mode}")
+            continue
+        decomp_fn = m[1]
+        comp_fn = m[2]
+        compressed_data = comp_fn(input_data)
+        isz = len(input_data)
+        csz = len(compressed_data)
+        rate = csz/isz
+        cnum, csec = timeit.Timer(stmt='bench()', globals={
+            "input_data": input_data, "comp_fn": comp_fn, "bench": bench_comp
+        }).autorange()
+        dnum, dsec = timeit.Timer(stmt='bench()', globals={
+            "input_data": compressed_data, "decomp_fn": decomp_fn, "bench": bench_decomp
+        }).autorange()
+        wr.writerow([str(x) for x in [mode, rate, isz*cnum/csec, csz*dnum/dsec]])
+
+
+@cli.command()
 @click.argument("args", nargs=-1)
 def sh(args):
     subprocess.run(["sh", *args])
