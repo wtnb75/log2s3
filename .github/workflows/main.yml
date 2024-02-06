@@ -2,7 +2,7 @@ name: main
 
 on:
   push:
-    branches: [main,pages]
+    branches: [main]
 
 permissions:
   packages: write
