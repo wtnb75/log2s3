@@ -166,19 +166,47 @@ def s3_du(s3: boto3.client, bucket_name: str, prefix: str, summary: bool, pathse
 @s3_option
 @verbose_option
 @click.option("--prefix", default='', help="AWS S3 Object Prefix")
-@click.option("--suffix", required=True, help="object key suffix")
+@click.option("--suffix", help="object key suffix")
+@click.option("--older", help="find older file")
+@click.option("--newer", help="find newer file")
+@click.option("--bigger", help="find bigger file")
+@click.option("--smaller", help="find smaller file")
 @click.option("--dry/--wet", help="dry run or wet run", default=False, show_default=True)
-def s3_delete_by_ext(s3: boto3.client, bucket_name: str, prefix: str, suffix: str, dry: bool):
-    res = allobjs(s3, bucket_name, prefix)
-    to_del = [x["Key"] for x in res if x["Key"].endswith(suffix)]
-    if len(to_del) == 0:
+def s3_delete_by(s3: boto3.client, bucket_name: str, prefix: str, suffix: str, dry: bool,
+                 older: str, newer: str, bigger: str, smaller: str):
+    import time
+    import pytimeparse
+    import humanfriendly
+    to_del = allobjs(s3, bucket_name, prefix)
+    now = time.time()
+    # suffix
+    if suffix:
+        to_del = [x for x in to_del if x["Key"].endswith(suffix)]
+    # older
+    if older:
+        check = now - pytimeparse.parse(older)
+        to_del = [x for x in to_del if x["LastModified"].timestamp() < check]
+    # newer
+    if newer:
+        check = now - pytimeparse.parse(older)
+        to_del = [x for x in to_del if x["LastModified"].timestamp() > check]
+    # bigger
+    if bigger:
+        check = humanfriendly.parse_size(bigger)
+        to_del = [x for x in to_del if x["Size"] > check]
+    # smaller
+    if smaller:
+        check = humanfriendly.parse_size(smaller)
+        to_del = [x for x in to_del if x["Size"] < check]
+    del_keys = [x["Key"] for x in to_del]
+    if len(del_keys) == 0:
         _log.info("no object found")
     elif dry:
-        _log.debug("remove objects: %s", to_del)
-        click.echo(f"remove {len(to_del)} objects")
+        _log.info("(dry)remove objects: %s", del_keys)
+        click.echo(f"(dry)remove {len(del_keys)} objects")
     else:
-        _log.info("remove %s objects", len(to_del))
-        s3.delete_objects(Bucket=bucket_name, Delete={"Objects": [{"Key": x} for x in to_del]})
+        _log.info("(wet)remove %s objects", len(del_keys))
+        s3.delete_objects(Bucket=bucket_name, Delete={"Objects": [{"Key": x} for x in del_keys]})
 
 
 @cli.command()

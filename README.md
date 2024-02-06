@@ -94,7 +94,7 @@ option/environment variables
 - compress and upload to S3 object storage
     - `log2s3 s3-put-tree --top /var/log/container --prefix $(hostname -s)/ --older 7d --compress xz`
 - remove by object key suffix
-    - `log2s3 s3-delete-by-ext --prefix $(hostname -s)/ --suffix .gz`
+    - `log2s3 s3-delete-by --prefix $(hostname -s)/ --suffix .gz`
 
 ## cat/view/edit
 
