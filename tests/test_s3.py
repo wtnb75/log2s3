@@ -1,6 +1,6 @@
 import unittest
 from click.testing import CliRunner
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from log2s3.main import cli
 
 
