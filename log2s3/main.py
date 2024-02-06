@@ -198,14 +198,15 @@ def s3_delete_by(s3: boto3.client, bucket_name: str, prefix: str, suffix: str, d
     if smaller:
         check = humanfriendly.parse_size(smaller)
         to_del = [x for x in to_del if x["Size"] < check]
-    if len(to_del) == 0:
+    del_keys = [x["Key"] for x in to_del]
+    if len(del_keys) == 0:
         _log.info("no object found")
     elif dry:
-        _log.debug("remove objects: %s", [x["Key"] for x in to_del])
+        _log.debug("remove objects: %s", str(del_keys))
         click.echo(f"remove {len(to_del)} objects")
     else:
-        _log.info("remove %s objects", len(to_del))
-        s3.delete_objects(Bucket=bucket_name, Delete={"Objects": [{"Key": x["Key"]} for x in to_del]})
+        _log.info("remove %s objects", len(del_keys))
+        s3.delete_objects(Bucket=bucket_name, Delete={"Objects": [{"Key": x} for x in del_keys]})
 
 
 @cli.command()
