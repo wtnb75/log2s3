@@ -43,6 +43,11 @@ try:
 except ImportError:
     pass
 try:
+    import py_snappy
+    modecmp_map["py_snappy"] = ("", py_snappy.decompress, py_snappy.compress)
+except ImportError:
+    pass
+try:
     import lzo
     modecmp_map["lzo"] = (".lzo", lzo.decompress, lzo.compress)
 except ImportError:
