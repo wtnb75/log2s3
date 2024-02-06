@@ -2,12 +2,11 @@ name: main
 
 on:
   push:
-    branches: [main]
+    branches: [main,page]
 
 permissions:
-  contents: read
+  packages: write
   pages: write
-  id-token: write
 
 jobs:
   build:
