@@ -188,7 +188,7 @@ def s3_delete_by(s3: boto3.client, bucket_name: str, prefix: str, suffix: str, d
         to_del = [x for x in to_del if x["LastModified"].timestamp() < check]
     # newer
     if newer:
-        check = now - pytimeparse.parse(older)
+        check = now - pytimeparse.parse(newer)
         to_del = [x for x in to_del if x["LastModified"].timestamp() > check]
     # bigger
     if bigger:
@@ -286,6 +286,8 @@ def s3_vi(s3: boto3.client, bucket_name: str, key: str, dry):
     _, ext = os.path.splitext(key)
     if ext in extcmp_map:
         compress_fn = extcmp_map[ext][2]
+    else:
+        def compress_fn(f): return f
     newdata = click.edit(text=bindata)
     if newdata is not None and newdata != bindata:
         wr = compress_fn(newdata.encode("utf-8"))
@@ -328,6 +330,8 @@ def edit_file(filename: str, dry):
     _, ext = os.path.splitext(fname)
     if ext in extcmp_map:
         compress_fn = extcmp_map[ext][2]
+    else:
+        def compress_fn(f): return f
     bindata = do_chain(data).decode('utf-8')
     newdata = click.edit(text=bindata)
     if newdata is not None and newdata != bindata:
