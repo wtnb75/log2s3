@@ -202,8 +202,8 @@ def s3_delete_by(s3: boto3.client, bucket_name: str, prefix: str, suffix: str, d
     if len(del_keys) == 0:
         _log.info("no object found")
     elif dry:
-        _log.debug("remove objects: %s", str(del_keys))
-        click.echo(f"remove {len(to_del)} objects")
+        _log.debug("remove objects: %s", del_keys)
+        click.echo(f"remove {len(del_keys)} objects")
     else:
         _log.info("remove %s objects", len(del_keys))
         s3.delete_objects(Bucket=bucket_name, Delete={"Objects": [{"Key": x} for x in del_keys]})
