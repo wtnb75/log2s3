@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 from .compr import auto_compress, do_chain
 import pytimeparse
 import humanfriendly
+import datetime
 
 
 _log = getLogger(__name__)
@@ -15,28 +16,45 @@ _log = getLogger(__name__)
 
 class FileProcessor(ABC):
     def __init__(self, config: dict = {}):
-        self.config = config
+        self.config = {k: v for k, v in config.items() if v is not None}
+
+    def check_date_range(self, mtime: float) -> bool:
+        if "older" in self.config:
+            older = pytimeparse.parse(self.config["older"])
+            if mtime > time.time()-older:
+                return False
+        if "newer" in self.config:
+            newer = pytimeparse.parse(self.config["newer"])
+            if mtime < time.time()-newer:
+                return False
+        if "date" in self.config:
+            mtime_datetime = datetime.datetime.fromtimestamp(mtime)
+            if ".." in self.config["date"]:
+                fromdate, todate = [datetime.date.fromisoformat(x) for x in self.config["date-range"].split("..", 1)]
+                if not fromdate < mtime_datetime < todate:
+                    return False
+            else:
+                fromdate = datetime.date.fromisoformat(self.config["date"])
+                todate = fromdate + datetime.timedelta(days=1)
+                if not fromdate < mtime_datetime < todate:
+                    return False
+        return True
+
+    def check_size_range(self, size: int):
+        if "smaller" in self.config:
+            smaller = humanfriendly.parse_size(self.config["smaller"], True)
+            if size > smaller:
+                return False
+        if "bigger" in self.config:
+            bigger = humanfriendly.parse_size(self.config["bigger"], True)
+            if size < bigger:
+                return False
+        return True
 
     def check(self, fname: pathlib.Path, stat: Optional[os.stat_result]) -> bool:
         if stat is None:
             stat = fname.stat()
-        if self.config.get("older"):
-            older = pytimeparse.parse(self.config["older"])
-            if stat.st_mtime > time.time()-older:
-                return False
-        if self.config.get("newer"):
-            newer = pytimeparse.parse(self.config["newer"])
-            if stat.st_mtime < time.time()-newer:
-                return False
-        if self.config.get("smaller"):
-            smaller = humanfriendly.parse_size(self.config["smaller"], True)
-            if stat.st_size > smaller:
-                return False
-        if self.config.get("bigger"):
-            bigger = humanfriendly.parse_size(self.config["bigger"], True)
-            if stat.st_size < bigger:
-                return False
-        return True
+        return self.check_date_range(stat.st_mtime) and self.check_size_range(stat.st_size)
 
     @abstractmethod
     def process(self, fname: pathlib.Path, stat: Optional[os.stat_result]) -> bool:
@@ -44,6 +62,11 @@ class FileProcessor(ABC):
 
 
 class DebugProcessor(FileProcessor):
+    def check(self, fname: pathlib.Path, stat: Optional[os.stat_result]) -> bool:
+        res = super().check(fname, stat)
+        _log.debug("debug: fname=%s, stat=%s -> %s / %s", fname, stat, res, self.config)
+        return res
+
     def process(self, fname: pathlib.Path, stat: Optional[os.stat_result]) -> bool:
         _log.info("debug: fname=%s, stat=%s", fname, stat)
         return False

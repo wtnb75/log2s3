@@ -1,7 +1,10 @@
 import unittest
+import datetime
 from click.testing import CliRunner
 from unittest.mock import patch, MagicMock, ANY
 from log2s3.main import cli
+
+now = datetime.datetime.now()
 
 
 class TestS3(unittest.TestCase):
@@ -44,10 +47,10 @@ class TestS3(unittest.TestCase):
         with patch("boto3.client") as cl:
             cl.return_value.list_objects.side_effect = [{
                 "IsTruncated": True,
-                "Contents": [{"LastModified": "1234", "Size": 1234, "Key": "key1234"}],
+                "Contents": [{"LastModified": now, "Size": 1234, "Key": "key1234"}],
             }, {
                 "IsTruncated": False,
-                "Contents": [{"LastModified": "12345", "Size": 12345, "Key": "key12345"}],
+                "Contents": [{"LastModified": now, "Size": 12345, "Key": "key12345"}],
             },
             ]
             res = CliRunner().invoke(cli, ["s3-list", "--s3-bucket", "bucket123"], env=self.envs)
@@ -65,14 +68,14 @@ class TestS3(unittest.TestCase):
             cl.return_value.list_objects.side_effect = [{
                 "IsTruncated": True,
                 "Contents": [
-                    {"LastModified": "1234", "Size": 1234, "Key": "dir1/key1234"},
-                    {"LastModified": "1234", "Size": 4321, "Key": "dir1/key2345"},
+                    {"LastModified": now, "Size": 1234, "Key": "dir1/key1234"},
+                    {"LastModified": now, "Size": 4321, "Key": "dir1/key2345"},
                 ],
             }, {
                 "IsTruncated": False,
                 "Contents": [
-                    {"LastModified": "12345", "Size": 4444, "Key": "dir1/key12345"},
-                    {"LastModified": "12345", "Size": 12345, "Key": "dir2/key23456"},
+                    {"LastModified": now, "Size": 4444, "Key": "dir1/key12345"},
+                    {"LastModified": now, "Size": 12345, "Key": "dir2/key23456"},
                 ],
             },
             ]
@@ -92,14 +95,14 @@ class TestS3(unittest.TestCase):
             cl.return_value.list_objects.side_effect = [{
                 "IsTruncated": True,
                 "Contents": [
-                    {"LastModified": "1234", "Size": 1234, "Key": "dir1/key1234"},
-                    {"LastModified": "1234", "Size": 4321, "Key": "dir1/key/2345"},
+                    {"LastModified": now, "Size": 1234, "Key": "dir1/key1234"},
+                    {"LastModified": now, "Size": 4321, "Key": "dir1/key/2345"},
                 ],
             }, {
                 "IsTruncated": False,
                 "Contents": [
-                    {"LastModified": "12345", "Size": 4444, "Key": "dir1/key12345"},
-                    {"LastModified": "12345", "Size": 12345, "Key": "dir2/key23456"},
+                    {"LastModified": now, "Size": 4444, "Key": "dir1/key12345"},
+                    {"LastModified": now, "Size": 12345, "Key": "dir2/key23456"},
                 ],
             },
             ]
@@ -242,7 +245,7 @@ class TestS3(unittest.TestCase):
             self.assertEqual(0, res.exit_code)
             cl.return_value.delete_objects.assert_called_once_with(
                 Bucket="bucket123",
-                Delete={"Objects": [{"Key": f"obj{x}"} for x in range(4)]})
+                Delete={"Objects": [{"Key": f"obj{x}"} for x in range(5)]})
 
     def test_s3_del_by_suffix(self):
         with patch("boto3.client") as cl:
