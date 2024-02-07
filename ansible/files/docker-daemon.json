@@ -3,6 +3,7 @@
   "log-opts": {
     "syslog-address": "tcp://localhost",
     "syslog-facility": "daemon",
+    "syslog-format": "rfc5424micro",
     "tag": "container/{{.Name}}/{{.ID}}"
   }
 }

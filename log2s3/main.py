@@ -1,6 +1,7 @@
 from logging import getLogger
 import os
 import sys
+import datetime
 import subprocess
 import functools
 import click
@@ -51,23 +52,48 @@ def filetree_option(func):
                   help="root directory to find files")
     @click.option("--older", help="find older file")
     @click.option("--newer", help="find newer file")
+    @click.option("--date", help="find date range(YYYY-mm-dd[..YYYY-mm-dd])")
     @click.option("--bigger", help="find bigger file")
     @click.option("--smaller", help="find smaller file")
     @click.option("--dry/--wet", help="dry run or wet run", default=False, show_default=True)
     @click.option("--compress", default="gzip", type=click.Choice(compress_modes),
                   help="compress type", show_default=True)
     @functools.wraps(func)
-    def _(top, older, newer, bigger, smaller, dry, compress, **kwargs):
+    def _(top, older, newer, date, bigger, smaller, dry, compress, **kwargs):
         config = {
             "top": top,
             "older": older,
             "newer": newer,
+            "date": date,
             "bigger": bigger,
             "smaller": smaller,
             "dry": dry,
             "compress": compress,
         }
         return func(top=pathlib.Path(top), config=config, **kwargs)
+    return _
+
+
+def s3tree_option(func):
+    @click.option("--prefix", default='', help="AWS S3 Object Key Prefix")
+    @click.option("--suffix", default='', help="AWS S3 Object Key Suffix")
+    @click.option("--older", help="find older file")
+    @click.option("--newer", help="find newer file")
+    @click.option("--date", help="find date range(YYYY-mm-dd[..YYYY-mm-dd])")
+    @click.option("--bigger", help="find bigger file")
+    @click.option("--smaller", help="find smaller file")
+    @functools.wraps(func)
+    def _(prefix, older, newer, date, bigger, smaller, suffix, **kwargs):
+        config = {
+            "top": prefix,
+            "older": older,
+            "newer": newer,
+            "date": date,
+            "bigger": bigger,
+            "smaller": smaller,
+            "suffix": suffix,
+        }
+        return func(top=pathlib.Path(prefix), config=config, **kwargs)
     return _
 
 
@@ -113,26 +139,38 @@ def allobjs(s3: boto3.client, bucket_name: str, prefix: str, marker: str = ''):
             yield from allobjs(s3, bucket_name=bucket_name, prefix=prefix, marker=mk)
 
 
+def s3obj2stat(obj: dict) -> os.stat_result:
+    ts = obj.get("LastModified", datetime.datetime.now()).timestamp()
+    sz = obj.get("Size", 0)
+    return os.stat_result((0o644, 0, 0, 0, 0, 0, sz, ts, ts, ts))
+
+
+def allobjs_conf(s3: boto3.client, bucket_name: str, prefix: str, config: dict):
+    from .processor import DebugProcessor
+    dummy = DebugProcessor(config)
+    suffix = config.get("suffix", "")
+    objs = allobjs(s3, bucket_name, prefix)
+    return filter(lambda x: x["Key"].endswith(suffix) and dummy.check(pathlib.Path(x["Key"]), s3obj2stat(x)), objs)
+
+
 @cli.command()
-@click.option("--prefix", default='', help="AWS S3 Object Prefix")
 @s3_option
+@s3tree_option
 @verbose_option
-def s3_list(s3: boto3.client, bucket_name: str, prefix: str):
-    res = allobjs(s3, bucket_name, prefix)
-    for i in res:
+def s3_list(s3: boto3.client, bucket_name: str, config: dict, top: pathlib.Path):
+    for i in allobjs_conf(s3, bucket_name, str(top).lstrip("/"), config):
         click.echo("%s %6d %s" % (i["LastModified"], i["Size"], i["Key"]))
 
 
 @cli.command()
-@click.option("--prefix", default='', help="AWS S3 Object Prefix")
 @click.option("--summary/--no-summary", "-S", default=False, type=bool)
 @click.option("--pathsep", default="/", show_default=True)
 @s3_option
+@s3tree_option
 @verbose_option
-def s3_du(s3: boto3.client, bucket_name: str, prefix: str, summary: bool, pathsep: str):
-    res = allobjs(s3, bucket_name, prefix)
+def s3_du(s3: boto3.client, bucket_name: str, config: dict, top: pathlib.Path, summary: bool, pathsep: str):
     out = {}
-    for i in res:
+    for i in allobjs_conf(s3, bucket_name, str(top).lstrip("/"), config):
         key = i["Key"]
         ks = key.rsplit(pathsep, 1)
         dirname = ks[0]
@@ -164,41 +202,11 @@ def s3_du(s3: boto3.client, bucket_name: str, prefix: str, summary: bool, pathse
 
 @cli.command()
 @s3_option
+@s3tree_option
 @verbose_option
-@click.option("--prefix", default='', help="AWS S3 Object Prefix")
-@click.option("--suffix", help="object key suffix")
-@click.option("--older", help="find older file")
-@click.option("--newer", help="find newer file")
-@click.option("--bigger", help="find bigger file")
-@click.option("--smaller", help="find smaller file")
 @click.option("--dry/--wet", help="dry run or wet run", default=False, show_default=True)
-def s3_delete_by(s3: boto3.client, bucket_name: str, prefix: str, suffix: str, dry: bool,
-                 older: str, newer: str, bigger: str, smaller: str):
-    import time
-    import pytimeparse
-    import humanfriendly
-    to_del = allobjs(s3, bucket_name, prefix)
-    now = time.time()
-    # suffix
-    if suffix:
-        to_del = [x for x in to_del if x["Key"].endswith(suffix)]
-    # older
-    if older:
-        check = now - pytimeparse.parse(older)
-        to_del = [x for x in to_del if x["LastModified"].timestamp() < check]
-    # newer
-    if newer:
-        check = now - pytimeparse.parse(newer)
-        to_del = [x for x in to_del if x["LastModified"].timestamp() > check]
-    # bigger
-    if bigger:
-        check = humanfriendly.parse_size(bigger)
-        to_del = [x for x in to_del if x["Size"] > check]
-    # smaller
-    if smaller:
-        check = humanfriendly.parse_size(smaller)
-        to_del = [x for x in to_del if x["Size"] < check]
-    del_keys = [x["Key"] for x in to_del]
+def s3_delete_by(s3: boto3.client, bucket_name: str, top: pathlib.Path, config: dict, dry: bool):
+    del_keys = [x["Key"] for x in allobjs_conf(s3, bucket_name, str(top).lstrip("/"), config)]
     if len(del_keys) == 0:
         _log.info("no object found")
     elif dry:

@@ -8,6 +8,11 @@
     path: /etc/rsyslog.conf
     regexp: 'input.*imtcp'
     line: 'input(type="imtcp" port="514")'
+- name: format
+  lineinfile:
+    path: /etc/rsyslog.conf
+    regexp: 'ActionFileDefaultTemplate'
+    line: '$ActionFileDefaultTemplate RSYSLOG_FileFormat'
 - name: config subdir
   lineinfile:
     path: /etc/rsyslog.conf
