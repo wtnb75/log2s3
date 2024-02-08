@@ -322,7 +322,7 @@ def _s3_read(s3: boto3.client, bucket_name: str, key: str) -> bytes:
 
 @cli.command()
 @s3_option
-@click.argument("key", nargs=-1)
+@click.argument("keys", nargs=-1)
 @verbose_option
 def s3_cat(s3: boto3.client, bucket_name: str, keys: list[str]):
     for key in keys:
