@@ -267,7 +267,7 @@ def init_bio(d: bytes) -> list[str, io.TextIOBase]:
 @cli.command()
 @click.argument("files", type=click.Path(file_okay=True, dir_okay=True, exists=True, readable=True), nargs=-1)
 @verbose_option
-def filetree_merge(files: list[click.Path]):
+def merge(files: list[click.Path]):
     input_data: list[bytes] = []
     for fn in files:
         p = pathlib.Path(fn)
@@ -358,11 +358,12 @@ def s3_vi(s3: boto3.client, bucket_name: str, key: str, dry):
 
 
 @cli.command("cat")
-@click.argument("filename", type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True))
+@click.argument("files", type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True), nargs=-1)
 @verbose_option
-def cat_file(filename: str):
-    _, data = auto_compress(pathlib.Path(filename), "decompress")
-    sys.stdout.buffer.write(do_chain(data))
+def cat_file(files: list[click.Path]):
+    for fn in files:
+        _, data = auto_compress(pathlib.Path(fn), "decompress")
+        sys.stdout.buffer.write(do_chain(data))
 
 
 @cli.command("less")
