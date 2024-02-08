@@ -264,6 +264,21 @@ def init_bio(d: bytes) -> list[str, io.TextIOBase]:
     return [next(r), r]
 
 
+def do_merge(input_data: list[bytes]):
+    input_files = [init_bio(x) for x in input_data]
+    input_files.sort(key=lambda f: f[0])
+    while len(input_files) != 0:
+        click.echo(input_files[0][0], nl=False)
+        try:
+            input_files[0][0] = next(input_files[0][1])
+            if len(input_files) == 1 or input_files[0][0] < input_files[1][0]:
+                # already sorted
+                continue
+        except StopIteration:
+            input_files.pop(0)
+        input_files.sort(key=lambda f: f[0])
+
+
 @cli.command()
 @click.argument("files", type=click.Path(file_okay=True, dir_okay=True, exists=True, readable=True), nargs=-1)
 @verbose_option
@@ -280,18 +295,7 @@ def merge(files: list[click.Path]):
                     _, ch = auto_compress(proot / pfn, "decompress")
                     input_data.append(do_chain(ch))
 
-    input_files = [init_bio(x) for x in input_data]
-    input_files.sort(key=lambda f: f[0])
-    while len(input_files) != 0:
-        click.echo(input_files[0][0], nl=False)
-        try:
-            input_files[0][0] = next(input_files[0][1])
-            if len(input_files) == 1 or input_files[0][0] < input_files[1][0]:
-                # already sorted
-                continue
-        except StopIteration:
-            input_files.pop(0)
-        input_files.sort(key=lambda f: f[0])
+    do_merge(input_data)
 
 
 @cli.command()
@@ -318,10 +322,11 @@ def _s3_read(s3: boto3.client, bucket_name: str, key: str) -> bytes:
 
 @cli.command()
 @s3_option
-@click.argument("key")
+@click.argument("key", nargs=-1)
 @verbose_option
-def s3_cat(s3: boto3.client, bucket_name: str, key):
-    sys.stdout.buffer.write(_s3_read(s3, bucket_name, key))
+def s3_cat(s3: boto3.client, bucket_name: str, keys: list[str]):
+    for key in keys:
+        sys.stdout.buffer.write(_s3_read(s3, bucket_name, key))
 
 
 @cli.command()
@@ -355,6 +360,18 @@ def s3_vi(s3: boto3.client, bucket_name: str, key: str, dry):
             s3.put_object(Body=wr, Bucket=bucket_name, Key=key)
     else:
         _log.info("not changed")
+
+
+@cli.command()
+@s3_option
+@click.argument("key", nargs=-1)
+@verbose_option
+def s3_merge(s3: boto3.client, bucket_name: str, keys: list[str]):
+    input_data = []
+    for key in keys:
+        input_data.append(_s3_read(s3, bucket_name, key))
+
+    do_merge(input_data)
 
 
 @cli.command("cat")
