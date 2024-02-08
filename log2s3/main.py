@@ -285,6 +285,9 @@ def filetree_merge(files: list[click.Path]):
         click.echo(input_files[0][0], nl=False)
         try:
             input_files[0][0] = next(input_files[0][1])
+            if len(input_files) == 1 or input_files[0][0] < input_files[1][0]:
+                # already sorted
+                continue
         except StopIteration:
             input_files.pop(0)
         input_files.sort(key=lambda f: f[0])
