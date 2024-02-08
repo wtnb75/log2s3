@@ -259,6 +259,11 @@ def filetree_delete(top: pathlib.Path, config: dict):
     process_walk(top, proc)
 
 
+def init_bio(d: bytes) -> list[str, io.TextIOBase]:
+    r = io.TextIOWrapper(io.BytesIO(d))
+    return [next(r), r]
+
+
 @cli.command()
 @click.argument("files", type=click.Path(file_okay=True, dir_okay=True, exists=True, readable=True), nargs=-1)
 @verbose_option
@@ -274,10 +279,6 @@ def filetree_merge(files: list[click.Path]):
                 for pfn in pfiles:
                     _, ch = auto_compress(proot / pfn, "decompress")
                     input_data.append(do_chain(ch))
-
-    def init_bio(d: bytes) -> list[str, io.TextIOBase]:
-        r = io.TextIOWrapper(io.BytesIO(d))
-        return [next(r), r]
 
     input_files = [init_bio(x) for x in input_data]
     input_files.sort(key=lambda f: f[0])
