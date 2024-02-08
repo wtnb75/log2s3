@@ -10,6 +10,7 @@
   "log-opts": {
     "syslog-address": "tcp://localhost",
     "syslog-facility": "daemon",
+    "syslog-format": "rfc5424micro",
     "tag": "container/{{.Name}}/{{.ID}}"
   }
 }
@@ -22,6 +23,8 @@
 module(load="imtcp")
 input(type="imtcp" port="514")
 # ...
+$ActionFileDefaultTemplate RSYSLOG_FileFormat
+
 $IncludeConfig /etc/rsyslog.d/*.conf
 ```
 
@@ -106,6 +109,11 @@ option/environment variables
     - `log2s3 s3-cat path/to/file.gz`
     - `log2s3 s3-less path/to/file.xz`
     - `log2s3 s3-vi path/to/file.bz2`
+
+## others
+
+- compress benchmark
+    - `log2s3 compress-benchmark /path/to/file`
 
 # examples
 

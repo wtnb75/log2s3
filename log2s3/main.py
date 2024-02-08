@@ -1,5 +1,6 @@
 from logging import getLogger
 import os
+import io
 import sys
 import datetime
 import subprocess
@@ -8,7 +9,7 @@ import click
 import pathlib
 import boto3
 from .version import VERSION
-from .compr import compress_modes
+from .compr import compress_modes, auto_compress, do_chain
 
 _log = getLogger(__name__)
 
@@ -229,6 +230,20 @@ def filetree_debug(top: pathlib.Path, config: dict):
 @cli.command()
 @filetree_option
 @verbose_option
+def filetree_list(top: pathlib.Path, config: dict):
+    from .processor import ListProcessor, process_walk
+    lp = ListProcessor(config)
+    process_walk(top, [lp])
+    click.echo("%10s %-19s %s" % ("size", "mtime", "name"))
+    click.echo("----------+-------------------+-----------------------")
+    for p, st in lp.output:
+        tmstr = datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+        click.echo("%10s %19s %s" % (st.st_size, tmstr, p))
+
+
+@cli.command()
+@filetree_option
+@verbose_option
 def filetree_compress(top: pathlib.Path, config: dict):
     from .processor import CompressProcessor, process_walk
     proc = [CompressProcessor(config)]
@@ -242,6 +257,37 @@ def filetree_delete(top: pathlib.Path, config: dict):
     from .processor import DelProcessor, process_walk
     proc = [DelProcessor(config)]
     process_walk(top, proc)
+
+
+@cli.command()
+@click.argument("files", type=click.Path(file_okay=True, dir_okay=True, exists=True, readable=True), nargs=-1)
+@verbose_option
+def filetree_merge(files: list[click.Path]):
+    input_data: list[bytes] = []
+    for fn in files:
+        p = pathlib.Path(fn)
+        if p.is_file:
+            _, ch = auto_compress(p, "decompress")
+            input_data.append(do_chain(ch))
+        elif p.is_dir:
+            for proot, _, pfiles in p.walk():
+                for pfn in pfiles:
+                    _, ch = auto_compress(proot / pfn, "decompress")
+                    input_data.append(do_chain(ch))
+
+    def init_bio(d: bytes) -> list[str, io.TextIOBase]:
+        r = io.TextIOWrapper(io.BytesIO(d))
+        return [next(r), r]
+
+    input_files = [init_bio(x) for x in input_data]
+    input_files.sort(key=lambda f: f[0])
+    while len(input_files) != 0:
+        click.echo(input_files[0][0], nl=False)
+        try:
+            input_files[0][0] = next(input_files[0][1])
+        except StopIteration:
+            input_files.pop(0)
+        input_files.sort(key=lambda f: f[0])
 
 
 @cli.command()
@@ -260,7 +306,6 @@ def s3_put_tree(s3: boto3.client, bucket_name: str, prefix: str, top: pathlib.Pa
 
 
 def _s3_read(s3: boto3.client, bucket_name: str, key: str) -> bytes:
-    from .compr import auto_compress, do_chain
     _, data = auto_compress(pathlib.Path(key), "decompress")
     res = s3.get_object(Bucket=bucket_name, Key=key)
     data[0] = res["Body"].read
@@ -312,7 +357,6 @@ def s3_vi(s3: boto3.client, bucket_name: str, key: str, dry):
 @click.argument("filename", type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True))
 @verbose_option
 def cat_file(filename: str):
-    from .compr import auto_compress, do_chain
     _, data = auto_compress(pathlib.Path(filename), "decompress")
     sys.stdout.buffer.write(do_chain(data))
 
@@ -321,7 +365,6 @@ def cat_file(filename: str):
 @click.argument("filename", type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True))
 @verbose_option
 def view_file(filename: str):
-    from .compr import auto_compress, do_chain
     _, data = auto_compress(pathlib.Path(filename), "decompress")
     bindata = do_chain(data)
     click.echo_via_pager(bindata.decode("utf-8"))
@@ -332,7 +375,7 @@ def view_file(filename: str):
 @click.option("--dry/--wet", help="dry run or wet run", default=False, show_default=True)
 @verbose_option
 def edit_file(filename: str, dry):
-    from .compr import auto_compress, do_chain, extcmp_map
+    from .compr import extcmp_map
     fname = pathlib.Path(filename)
     _, data = auto_compress(fname, "decompress")
     _, ext = os.path.splitext(fname)

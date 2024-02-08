@@ -36,7 +36,7 @@ class FileProcessor(ABC):
             else:
                 fromdate = datetime.date.fromisoformat(self.config["date"])
                 todate = fromdate + datetime.timedelta(days=1)
-                if not fromdate < mtime_datetime < todate:
+                if not fromdate <= mtime_datetime.date() <= todate:
                     return False
         return True
 
@@ -69,6 +69,16 @@ class DebugProcessor(FileProcessor):
 
     def process(self, fname: pathlib.Path, stat: Optional[os.stat_result]) -> bool:
         _log.info("debug: fname=%s, stat=%s", fname, stat)
+        return False
+
+
+class ListProcessor(FileProcessor):
+    def __init__(self, config: dict = {}):
+        super().__init__(config)
+        self.output: list[tuple[pathlib.Path, os.stat_result]] = []
+
+    def process(self, fname: pathlib.Path, stat: Optional[os.stat_result]) -> bool:
+        self.output.append((fname, stat))
         return False
 
 
