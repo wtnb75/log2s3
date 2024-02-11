@@ -6,6 +6,7 @@ import datetime
 import subprocess
 import functools
 import click
+import json
 import pathlib
 import boto3
 from .version import VERSION
@@ -118,6 +119,7 @@ def verbose_option(func):
 @s3_option
 @verbose_option
 def s3_make_bucket(s3: boto3.client, bucket_name: str):
+    """make S3 buckets"""
     res = s3.create_bucket(Bucket=bucket_name)
     click.echo(f"response {res}")
 
@@ -126,6 +128,7 @@ def s3_make_bucket(s3: boto3.client, bucket_name: str):
 @s3_option
 @verbose_option
 def s3_bucket(s3: boto3.client, bucket_name: str):
+    """list S3 buckets"""
     res = s3.list_buckets()
     click.echo(f"response {res}")
 
@@ -159,6 +162,7 @@ def allobjs_conf(s3: boto3.client, bucket_name: str, prefix: str, config: dict):
 @s3tree_option
 @verbose_option
 def s3_list(s3: boto3.client, bucket_name: str, config: dict, top: pathlib.Path):
+    """list S3 objects"""
     for i in allobjs_conf(s3, bucket_name, str(top).lstrip("/"), config):
         click.echo("%s %6d %s" % (i["LastModified"], i["Size"], i["Key"]))
 
@@ -170,6 +174,7 @@ def s3_list(s3: boto3.client, bucket_name: str, config: dict, top: pathlib.Path)
 @s3tree_option
 @verbose_option
 def s3_du(s3: boto3.client, bucket_name: str, config: dict, top: pathlib.Path, summary: bool, pathsep: str):
+    """show S3 directory usage"""
     out = {}
     for i in allobjs_conf(s3, bucket_name, str(top).lstrip("/"), config):
         key = i["Key"]
@@ -207,6 +212,7 @@ def s3_du(s3: boto3.client, bucket_name: str, config: dict, top: pathlib.Path, s
 @verbose_option
 @click.option("--dry/--wet", help="dry run or wet run", default=False, show_default=True)
 def s3_delete_by(s3: boto3.client, bucket_name: str, top: pathlib.Path, config: dict, dry: bool):
+    """delete S3 objects"""
     del_keys = [x["Key"] for x in allobjs_conf(s3, bucket_name, str(top).lstrip("/"), config)]
     if len(del_keys) == 0:
         _log.info("no object found")
@@ -222,6 +228,7 @@ def s3_delete_by(s3: boto3.client, bucket_name: str, top: pathlib.Path, config: 
 @filetree_option
 @verbose_option
 def filetree_debug(top: pathlib.Path, config: dict):
+    """(debug command)"""
     from .processor import DebugProcessor, process_walk
     proc = [DebugProcessor(config)]
     process_walk(top, proc)
@@ -231,6 +238,7 @@ def filetree_debug(top: pathlib.Path, config: dict):
 @filetree_option
 @verbose_option
 def filetree_list(top: pathlib.Path, config: dict):
+    """list files"""
     from .processor import ListProcessor, process_walk
     lp = ListProcessor(config)
     process_walk(top, [lp])
@@ -245,6 +253,7 @@ def filetree_list(top: pathlib.Path, config: dict):
 @filetree_option
 @verbose_option
 def filetree_compress(top: pathlib.Path, config: dict):
+    """compress files"""
     from .processor import CompressProcessor, process_walk
     proc = [CompressProcessor(config)]
     process_walk(top, proc)
@@ -254,6 +263,7 @@ def filetree_compress(top: pathlib.Path, config: dict):
 @filetree_option
 @verbose_option
 def filetree_delete(top: pathlib.Path, config: dict):
+    """remove files"""
     from .processor import DelProcessor, process_walk
     proc = [DelProcessor(config)]
     process_walk(top, proc)
@@ -283,6 +293,7 @@ def do_merge(input_data: list[bytes]):
 @click.argument("files", type=click.Path(file_okay=True, dir_okay=True, exists=True, readable=True), nargs=-1)
 @verbose_option
 def merge(files: list[click.Path]):
+    """merge sorted log files"""
     input_data: list[bytes] = []
     for fn in files:
         p = pathlib.Path(fn)
@@ -304,6 +315,7 @@ def merge(files: list[click.Path]):
 @filetree_option
 @verbose_option
 def s3_put_tree(s3: boto3.client, bucket_name: str, prefix: str, top: pathlib.Path, config: dict):
+    """compress and put log files to S3"""
     config["s3"] = s3
     config["s3_bucket"] = bucket_name
     config["s3_prefix"] = prefix
@@ -325,6 +337,7 @@ def _s3_read(s3: boto3.client, bucket_name: str, key: str) -> bytes:
 @click.argument("keys", nargs=-1)
 @verbose_option
 def s3_cat(s3: boto3.client, bucket_name: str, keys: list[str]):
+    """concatinate compressed objects"""
     for key in keys:
         sys.stdout.buffer.write(_s3_read(s3, bucket_name, key))
 
@@ -334,6 +347,7 @@ def s3_cat(s3: boto3.client, bucket_name: str, keys: list[str]):
 @click.argument("key")
 @verbose_option
 def s3_less(s3: boto3.client, bucket_name: str, key: str):
+    """view compressed object"""
     click.echo_via_pager(_s3_read(s3, bucket_name, key).decode("utf-8"))
 
 
@@ -343,6 +357,7 @@ def s3_less(s3: boto3.client, bucket_name: str, key: str):
 @click.option("--dry/--wet", help="dry run or wet run", default=False, show_default=True)
 @verbose_option
 def s3_vi(s3: boto3.client, bucket_name: str, key: str, dry):
+    """edit compressed object and overwrite"""
     bindata = _s3_read(s3, bucket_name, key).decode("utf-8")
     from .compr import extcmp_map
     _, ext = os.path.splitext(key)
@@ -367,6 +382,7 @@ def s3_vi(s3: boto3.client, bucket_name: str, key: str, dry):
 @click.argument("keys", nargs=-1)
 @verbose_option
 def s3_merge(s3: boto3.client, bucket_name: str, keys: list[str]):
+    """merge sorted log objects"""
     input_data = []
     for key in keys:
         input_data.append(_s3_read(s3, bucket_name, key))
@@ -378,6 +394,7 @@ def s3_merge(s3: boto3.client, bucket_name: str, keys: list[str]):
 @click.argument("files", type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True), nargs=-1)
 @verbose_option
 def cat_file(files: list[click.Path]):
+    """concatinate compressed files"""
     for fn in files:
         _, data = auto_compress(pathlib.Path(fn), "decompress")
         sys.stdout.buffer.write(do_chain(data))
@@ -387,6 +404,7 @@ def cat_file(files: list[click.Path]):
 @click.argument("filename", type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True))
 @verbose_option
 def view_file(filename: str):
+    """view compressed file"""
     _, data = auto_compress(pathlib.Path(filename), "decompress")
     bindata = do_chain(data)
     click.echo_via_pager(bindata.decode("utf-8"))
@@ -397,6 +415,7 @@ def view_file(filename: str):
 @click.option("--dry/--wet", help="dry run or wet run", default=False, show_default=True)
 @verbose_option
 def edit_file(filename: str, dry):
+    """edit compressed file contents and overwrite"""
     from .compr import extcmp_map
     fname = pathlib.Path(filename)
     _, data = auto_compress(fname, "decompress")
@@ -423,6 +442,7 @@ def edit_file(filename: str, dry):
 @click.option("--compress", default=None, type=click.Choice(compress_modes),
               help="compress type", multiple=True)
 def compress_benchmark(compress, file):
+    """benchmark compress algorithm"""
     import csv
     import timeit
     from .compr import modecmp_map
@@ -460,14 +480,55 @@ def compress_benchmark(compress, file):
 
 
 @cli.command()
+@click.option("--format", type=click.Choice(["combined", "common", "debug"]), default="combined", show_default=True)
+@click.option("--nth", type=int, default=1, show_default=True, help="parse from n-th '{'")
+@click.argument("file", type=click.File(), default=sys.stdin)
+def traefik_json_convert(file, nth, format):
+    """
+    convert traefik access-log(json) to other format
+
+    traefik --accesslog=true --accesslog.format=json \\\
+        --accesslog.fields.defaultmode=keep \\\
+        --accesslog.fields.headers.defaultmode=keep
+    """
+    from collections import defaultdict
+    common = "%(ClientHost)s - %(ClientUsername)s [%(httptime)s]" \
+        " \"%(RequestMethod)s %(RequestPath)s %(RequestProtocol)s\"" \
+        " %(DownstreamStatus)d %(DownstreamContentSize)s"
+    combined = "%(ClientHost)s - %(ClientUsername)s [%(httptime)s]" \
+        " \"%(RequestMethod)s %(RequestPath)s %(RequestProtocol)s\"" \
+        " %(DownstreamStatus)d %(DownstreamContentSize)s" \
+        " \"%(request_Referer)s\" \"%(request_User-Agent)s\""
+    dateformat = "%d/%b/%Y:%H:%M:%S %z"
+    format_map = {
+        "combined": combined,
+        "common": common,
+        "debug": "%s",
+    }
+    fmt = format_map.get(format, combined)
+    for line in file:
+        n = line.split('{', nth)
+        jsonstr = '{' + n[-1]
+        try:
+            jsdata: dict = json.loads(jsonstr)
+            ts = datetime.datetime.fromisoformat(jsdata.get("time")).astimezone()
+            jsdata["httptime"] = ts.strftime(dateformat)
+            click.echo(fmt % defaultdict(lambda: "-", **jsdata))
+        except json.JSONDecodeError:
+            _log.exception("parse error: %s", jsonstr)
+
+
+@cli.command()
 @click.argument("args", nargs=-1)
 def sh(args):
+    """execute /bin/sh"""
     subprocess.run(["sh", *args])
 
 
 @cli.command()
 @click.argument("args", nargs=-1)
 def bash(args):
+    """execute bash"""
     subprocess.run(["bash", *args])
 
 
