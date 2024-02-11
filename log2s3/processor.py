@@ -30,13 +30,14 @@ class FileProcessor(ABC):
         if "date" in self.config:
             mtime_datetime = datetime.datetime.fromtimestamp(mtime)
             if ".." in self.config["date"]:
-                fromdate, todate = [datetime.date.fromisoformat(x) for x in self.config["date-range"].split("..", 1)]
-                if not fromdate < mtime_datetime < todate:
+                fromdate, todate = [datetime.datetime.fromisoformat(
+                    x) for x in self.config["date"].split("..", 1)]
+                if not fromdate <= mtime_datetime < todate:
                     return False
             else:
-                fromdate = datetime.date.fromisoformat(self.config["date"])
+                fromdate = datetime.datetime.fromisoformat(self.config["date"])
                 todate = fromdate + datetime.timedelta(days=1)
-                if not fromdate <= mtime_datetime.date() <= todate:
+                if not fromdate <= mtime_datetime < todate:
                     return False
         return True
 

@@ -456,7 +456,7 @@ def compress_benchmark(compress, file):
         dnum, dsec = timeit.Timer(stmt='bench()', globals={
             "input_data": compressed_data, "decomp_fn": decomp_fn, "bench": bench_decomp
         }).autorange()
-        wr.writerow([str(x) for x in [mode, rate, isz*cnum/csec, csz*dnum/dsec]])
+        wr.writerow([str(x) for x in [mode, rate, isz*cnum/csec, isz*dnum/dsec]])
 
 
 @cli.command()

@@ -40,6 +40,30 @@ class TestProcessor(unittest.TestCase):
         process_walk(self.basedir, [dp])
         self.assertEqual(20, self._count()[0])  # 4 files x 5 dirs
 
+    def test_delete3(self):
+        pre_cnts = self._count()
+        dt = datetime.now()-timedelta(days=2)
+
+        dp = DelProcessor({"date": dt.strftime("%Y-%m-%d")})
+        process_walk(self.basedir, [dp])
+        cnts = self._count()
+        self.assertEqual(pre_cnts[0]-5, cnts[0])
+
+    def test_delete4(self):
+        pre_cnts = self._count()
+        dt = datetime.now()-timedelta(days=3)
+        dt2 = datetime.now()-timedelta(days=1)
+
+        dp = DelProcessor({"date": dt.strftime("%Y-%m-%d")+".."+dt2.strftime("%Y-%m-%d")})
+        process_walk(self.basedir, [dp])
+        cnts = self._count()
+        self.assertEqual(pre_cnts[0]-10, cnts[0])
+
+    def test_delete5(self):
+        dp = DelProcessor({"older": "1d", "bigger": "4.1k", "dry": True})
+        process_walk(self.basedir, [dp])
+        self.assertEqual(50, self._count()[0])
+
     def test_compress1(self):
         pre_cnts = self._count()
         dp = CompressProcessor({"older": "2d", "bigger": "1k", "compress": "gzip"})
