@@ -415,7 +415,7 @@ def view_file(filename: str):
 @click.option("--dry/--wet", help="dry run or wet run", default=False, show_default=True)
 @verbose_option
 def edit_file(filename: str, dry):
-    """edit compressed file contents and overwrite"""
+    """edit compressed file and overwrite"""
     from .compr import extcmp_map
     fname = pathlib.Path(filename)
     _, data = auto_compress(fname, "decompress")
@@ -439,10 +439,18 @@ def edit_file(filename: str, dry):
 
 @cli.command()
 @click.argument("file")
-@click.option("--compress", default=None, type=click.Choice(compress_modes),
-              help="compress type", multiple=True)
+@click.option("--compress", default=None, type=click.Choice(set(compress_modes)-{"raw", "decompress"}),
+              help="compress type (default: all)", multiple=True)
 def compress_benchmark(compress, file):
-    """benchmark compress algorithm"""
+    """benchmark compress algorithm
+
+    \b
+    outputs:
+        mode: mode string
+        rate: compression rate (compressed size/original size)
+        compress: compress throuput (original bytes/sec)
+        decompress: decompress throuput (original bytes/sec)
+    """
     import csv
     import timeit
     from .compr import modecmp_map
@@ -487,8 +495,9 @@ def traefik_json_convert(file, nth, format):
     """
     convert traefik access-log(json) to other format
 
-    traefik --accesslog=true --accesslog.format=json \\\
-        --accesslog.fields.defaultmode=keep \\\
+    \b
+    traefik --accesslog=true --accesslog.format=json \\
+        --accesslog.fields.defaultmode=keep \\
         --accesslog.fields.headers.defaultmode=keep
     """
     from collections import defaultdict
