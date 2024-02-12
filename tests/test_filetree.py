@@ -5,7 +5,6 @@ import pathlib
 import os
 import glob
 from click.testing import CliRunner
-from unittest.mock import patch, MagicMock, ANY
 from log2s3.main import cli
 
 
