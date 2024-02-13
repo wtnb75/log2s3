@@ -62,3 +62,24 @@ class TestProcessor(unittest.TestCase):
             raise res.exceptoin
         self.assertEqual(0, res.exit_code)
         self.assertEqual(50-5, len(glob.glob(os.path.join(self.td.name, "*", "*.log"))))
+
+    def test_compbench(self):
+        dt = datetime.now()-timedelta(days=2)
+        res = CliRunner().invoke(cli, [
+            "compress-benchmark", os.path.join(self.td.name, "dir0", dt.strftime("%Y-%m-%d.log"))])
+        if res.exception:
+            raise res.exceptoin
+        self.assertEqual(0, res.exit_code)
+        self.assertIn("gzip", res.output)
+
+    def test_compbench2(self):
+        dt = datetime.now()-timedelta(days=2)
+        res = CliRunner().invoke(cli, [
+            "compress-benchmark", "--compress", "gzip", "--compress", "bzip2",
+            os.path.join(self.td.name, "dir0", dt.strftime("%Y-%m-%d.log"))])
+        if res.exception:
+            raise res.exceptoin
+        self.assertEqual(0, res.exit_code)
+        self.assertIn("gzip", res.output)
+        self.assertIn("bzip2", res.output)
+        self.assertNotIn("xz", res.output)

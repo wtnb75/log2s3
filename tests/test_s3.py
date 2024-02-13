@@ -90,6 +90,21 @@ class TestS3(unittest.TestCase):
             self.assertIn(" 9999 ", res.output)  # 1234 + 4321 + 4444
             self.assertIn(" 3 dir1", res.output)
 
+    def test_s3_du_empty(self):
+        with patch("boto3.client") as cl:
+            cl.return_value.list_objects.return_value = {
+                "IsTruncated": False,
+                "Contents": [],
+            }
+            res = CliRunner().invoke(cli, ["s3-du", "--s3-bucket", "bucket123"], env=self.envs)
+            if res.exception:
+                raise res.exception
+            self.assertEqual(0, res.exit_code)
+            cl.assert_called_once_with(
+                's3', aws_access_key_id="access123", aws_secret_access_key="secret123",
+                region_name="region123", endpoint_url="https://example.com/")
+            self.assertIn("empty result", res.output)
+
     def test_s3_du_s(self):
         with patch("boto3.client") as cl:
             cl.return_value.list_objects.side_effect = [{
