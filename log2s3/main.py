@@ -297,14 +297,16 @@ def merge(files: list[click.Path]):
     input_data: list[bytes] = []
     for fn in files:
         p = pathlib.Path(fn)
-        if p.is_file:
+        if p.is_file():
             _, ch = auto_compress(p, "decompress")
             input_data.append(do_chain(ch))
-        elif p.is_dir:
+        elif p.is_dir():
             for proot, _, pfiles in p.walk():
                 for pfn in pfiles:
                     _, ch = auto_compress(proot / pfn, "decompress")
                     input_data.append(do_chain(ch))
+        else:
+            _log.warning("%s is not a directory or file", p)
 
     do_merge(input_data)
 
