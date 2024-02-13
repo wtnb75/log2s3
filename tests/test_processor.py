@@ -72,6 +72,13 @@ class TestProcessor(unittest.TestCase):
         self.assertEqual(pre_cnts[0], cnts[0])
         self.assertGreater(pre_cnts[1], cnts[1])
 
+    def test_compress1_dry(self):
+        pre_cnts = self._count()
+        dp = CompressProcessor({"older": "2d", "bigger": "1k", "compress": "gzip", "dry": True})
+        process_walk(self.basedir, [dp])
+        cnts = self._count()
+        self.assertEqual(pre_cnts, cnts)
+
     def test_compress2(self):
         pre_cnts = self._count()
         dp = CompressProcessor({"bigger": "100k", "compress": "gzip"})
