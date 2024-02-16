@@ -57,11 +57,12 @@ def filetree_option(func):
     @click.option("--date", help="find date range(YYYY-mm-dd[..YYYY-mm-dd])")
     @click.option("--bigger", help="find bigger file")
     @click.option("--smaller", help="find smaller file")
+    @click.option("--glob", help="glob pattern")
     @click.option("--dry/--wet", help="dry run or wet run", default=False, show_default=True)
     @click.option("--compress", default="gzip", type=click.Choice(compress_modes),
                   help="compress type", show_default=True)
     @functools.wraps(func)
-    def _(top, older, newer, date, bigger, smaller, dry, compress, **kwargs):
+    def _(top, older, newer, date, bigger, smaller, glob, dry, compress, **kwargs):
         config = {
             "top": top,
             "older": older,
@@ -69,6 +70,7 @@ def filetree_option(func):
             "date": date,
             "bigger": bigger,
             "smaller": smaller,
+            "glob": glob,
             "dry": dry,
             "compress": compress,
         }
@@ -84,8 +86,9 @@ def s3tree_option(func):
     @click.option("--date", help="find date range(YYYY-mm-dd[..YYYY-mm-dd])")
     @click.option("--bigger", help="find bigger file")
     @click.option("--smaller", help="find smaller file")
+    @click.option("--glob", help="glob pattern")
     @functools.wraps(func)
-    def _(prefix, older, newer, date, bigger, smaller, suffix, **kwargs):
+    def _(prefix, older, newer, date, bigger, smaller, suffix, glob, **kwargs):
         config = {
             "top": prefix,
             "older": older,
@@ -94,6 +97,7 @@ def s3tree_option(func):
             "bigger": bigger,
             "smaller": smaller,
             "suffix": suffix,
+            "glob": glob,
         }
         return func(top=pathlib.Path(prefix), config=config, **kwargs)
     return _
@@ -130,7 +134,9 @@ def s3_make_bucket(s3: boto3.client, bucket_name: str):
 def s3_bucket(s3: boto3.client, bucket_name: str):
     """list S3 buckets"""
     res = s3.list_buckets()
-    click.echo(f"response {res}")
+    _log.debug("response %s", res)
+    for bkt in res.get("Buckets", []):
+        click.echo("%s %s" % (bkt["CreationDate"], bkt["Name"]))
 
 
 def allobjs(s3: boto3.client, bucket_name: str, prefix: str, marker: str = ''):
@@ -340,7 +346,7 @@ def s3_put1(s3: boto3.client, bucket_name: str, key: str, filename: str, compres
     """put 1 file to S3"""
     from .compr_stream import S3PutStream, auto_compress_stream
     input_path = pathlib.Path(filename)
-    st = auto_compress_stream(input_path, compress)
+    _, st = auto_compress_stream(input_path, compress)
     ost = S3PutStream(st, s3, bucket_name, key)
     for _ in ost.gen():
         pass
@@ -543,7 +549,7 @@ def traefik_json_convert(file, nth, format):
     else:
         path = pathlib.Path(file)
         ist = None
-    ofp = auto_compress_stream(path, "decompress", ist)
+    _, ofp = auto_compress_stream(path, "decompress", ist)
     fmt = format_map.get(format, combined)
     for line in ofp.text_gen():
         n = line.split('{', nth)

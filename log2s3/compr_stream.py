@@ -384,24 +384,27 @@ stream_ext = {v[0]: (k, *v[1:]) for k, v in stream_map.items()}
 stream_compress_modes = list(stream_map.keys()) + ["decompress", "raw"]
 
 
-def auto_compress_stream(ifname: pathlib.Path, mode: str, ifp: Optional[Stream] = None) -> Stream:
+def auto_compress_stream(ifname: pathlib.Path, mode: str, ifp: Optional[Stream] = None) -> tuple[os.PathLike, Stream]:
     if ifp is None:
         ifp = FileReadStream(ifname.open('br'))
     if mode == "raw":
-        return ifp
-    _, ext = os.path.splitext(str(ifname))
+        return ifname, ifp
+    base, ext = os.path.splitext(str(ifname))
     # decompress
     res: Stream = ifp
     if ext in stream_ext:
         imode, _, dst = stream_ext[ext]
         if imode == mode:
-            return res
+            return ifname, res
         _log.debug("input mode: %s", imode)
         res = dst(res)
+    else:
+        base = str(ifname)
     if mode == "decompress":
-        return res
+        return pathlib.Path(base), res
     # compress
     if mode in stream_map:
-        _, cst, _ = stream_map[mode]
+        ext, cst, _ = stream_map[mode]
         res = cst(res)
-    return res
+        base = base + ext
+    return pathlib.Path(base), res

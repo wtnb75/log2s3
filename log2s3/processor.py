@@ -41,7 +41,7 @@ class FileProcessor(ABC):
                     return False
         return True
 
-    def check_size_range(self, size: int):
+    def check_size_range(self, size: int) -> bool:
         if "smaller" in self.config:
             smaller = humanfriendly.parse_size(self.config["smaller"], True)
             if size > smaller:
@@ -52,10 +52,26 @@ class FileProcessor(ABC):
                 return False
         return True
 
+    def check_name(self, fname: pathlib.Path) -> bool:
+        if "suffix" in self.config:
+            if not str(fname).endswith(self.config["suffix"]):
+                return False
+        if "prefix" in self.config:
+            if not str(fname).startswith(self.config["prefix"]):
+                return False
+        if "glob" in self.config:
+            if not fname.match(self.config["glob"]):
+                return False
+        if "iglob" in self.config:
+            if not fname.match(self.config["iglob"], case_sensitive=False):
+                return False
+        return True
+
     def check(self, fname: pathlib.Path, stat: Optional[os.stat_result]) -> bool:
         if stat is None:
             stat = fname.stat()
-        return self.check_date_range(stat.st_mtime) and self.check_size_range(stat.st_size)
+        return self.check_date_range(stat.st_mtime) and self.check_size_range(stat.st_size) and \
+            self.check_name(fname)
 
     @abstractmethod
     def process(self, fname: pathlib.Path, stat: Optional[os.stat_result]) -> bool:
