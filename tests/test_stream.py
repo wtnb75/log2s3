@@ -1,6 +1,10 @@
 import unittest
 import tempfile
-from log2s3.compr_stream import FileReadStream, FileWriteStream, stream_map
+import lzma
+import gzip
+import pathlib
+from log2s3.compr_stream import FileReadStream, FileWriteStream, \
+    RawReadStream, stream_map, auto_compress_stream
 
 
 class TestInOut(unittest.TestCase):
@@ -41,3 +45,86 @@ class TestInOut(unittest.TestCase):
                     tfout.flush()
                     tfout.seek(0)
                     self.assertEqual(self.input_data, tfout.read())
+
+
+class TestAutoStream(unittest.TestCase):
+    def test_xz2decompress(self):
+        data = b"hello world\n" * 1000
+        xzdata = lzma.compress(data, lzma.FORMAT_XZ)
+        with tempfile.TemporaryFile("w+b", suffix=".xz") as tf:
+            tf.write(xzdata)
+            tf.flush()
+            tf.seek(0)
+            st = FileReadStream(tf)
+            cst = auto_compress_stream(pathlib.Path("hello.xz"), "decompress", st)
+            self.assertEqual(data, cst.read_all())
+
+    def test_xz2decompress_file(self):
+        data = b"hello world\n" * 1000
+        xzdata = lzma.compress(data, lzma.FORMAT_XZ)
+        with tempfile.NamedTemporaryFile("w+b", suffix=".xz") as tf:
+            tf.write(xzdata)
+            tf.flush()
+            tf.seek(0)
+            cst = auto_compress_stream(pathlib.Path(tf.name), "decompress")
+            self.assertEqual(data, cst.read_all())
+
+    def test_xz2decompress_bytes(self):
+        data = b"hello world\n" * 1000
+        xzdata = lzma.compress(data, lzma.FORMAT_XZ)
+        st = RawReadStream(xzdata)
+        cst = auto_compress_stream(pathlib.Path("test.xz"), "decompress", st)
+        self.assertEqual(data, cst.read_all())
+
+    def test_xz2unknown_file(self):
+        data = b"hello world\n" * 1000
+        xzdata = lzma.compress(data, lzma.FORMAT_XZ)
+        with tempfile.NamedTemporaryFile("w+b", suffix=".xz") as tf:
+            tf.write(xzdata)
+            tf.flush()
+            tf.seek(0)
+            cst = auto_compress_stream(pathlib.Path(tf.name), "unknown")
+            self.assertEqual(data, cst.read_all())
+
+    def test_unknown2xz_file(self):
+        data = b"hello world\n" * 1000
+        xzdata = lzma.compress(data, lzma.FORMAT_XZ)
+        with tempfile.NamedTemporaryFile("w+b", suffix=".unkonwn") as tf:
+            tf.write(data)
+            tf.flush()
+            tf.seek(0)
+            cst = auto_compress_stream(pathlib.Path(tf.name), "xz")
+            self.assertEqual(xzdata, cst.read_all())
+
+    def test_xz2gzip(self):
+        data = b"hello world\n" * 1000
+        xzdata = lzma.compress(data, lzma.FORMAT_XZ)
+        with tempfile.TemporaryFile("w+b", suffix=".xz") as tf:
+            tf.write(xzdata)
+            tf.flush()
+            tf.seek(0)
+            st = FileReadStream(tf)
+            cst = auto_compress_stream(pathlib.Path("hello.xz"), "gzip", st)
+            self.assertEqual(data, gzip.decompress(cst.read_all()))
+
+    def test_xzraw(self):
+        data = b"hello world\n" * 1000
+        xzdata = lzma.compress(data, lzma.FORMAT_XZ)
+        with tempfile.TemporaryFile("w+b", suffix=".xz") as tf:
+            tf.write(xzdata)
+            tf.flush()
+            tf.seek(0)
+            st = FileReadStream(tf)
+            cst = auto_compress_stream(pathlib.Path("hello.xz"), "raw", st)
+            self.assertEqual(xzdata, cst.read_all())
+
+    def test_xz2xz(self):
+        data = b"hello world\n" * 1000
+        xzdata = lzma.compress(data, lzma.FORMAT_XZ)
+        with tempfile.TemporaryFile("w+b", suffix=".xz") as tf:
+            tf.write(xzdata)
+            tf.flush()
+            tf.seek(0)
+            st = FileReadStream(tf)
+            cst = auto_compress_stream(pathlib.Path("hello.xz"), "xz", st)
+            self.assertEqual(xzdata, cst.read_all())

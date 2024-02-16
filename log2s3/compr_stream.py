@@ -1,8 +1,12 @@
 import lzma
 import bz2
 import gzip
+import pathlib
+from typing import Optional
 from logging import getLogger
+import boto3
 import io
+import os
 
 _log = getLogger(__name__)
 
@@ -10,6 +14,12 @@ _log = getLogger(__name__)
 class Stream:
     def __init__(self, prev_stream):
         self.prev = prev_stream
+
+    def init_fp(self):
+        _log.debug("use as fp(%s)", self.__class__.__name__)
+        self.gen1 = self.prev.gen()
+        self.buf = [next(self.gen1)]
+        self.eof = False
 
     # work as pass-thru stream
     def gen(self):
@@ -41,9 +51,43 @@ class Stream:
             buf = io.TextIOWrapper(io.BytesIO(rest))
             yield from buf
 
+    def read(self, sz: int = -1) -> bytes:
+        assert hasattr(self, "eof")
+        if self.eof:
+            return b""
+        if sz == -1:
+            _log.debug("read all")
+            try:
+                while True:
+                    self.buf.append(next(self.gen1))
+            except StopIteration:
+                _log.debug("read %s / %s", len(self.buf), sum([len(x) for x in self.buf]))
+            buf = self.buf
+            self.buf = []
+            self.eof = True
+            return b"".join(buf)
+        cur = sum([len(x) for x in self.buf])
+        try:
+            _log.debug("read part cur=%s / sz=%s", cur, sz)
+            while cur < sz:
+                bt = next(self.gen1)
+                _log.debug("read1 %d / cur=%s, sz=%s", len(bt), cur, sz)
+                self.buf.append(bt)
+                cur += len(bt)
+            buf = b"".join(self.buf)
+            self.buf = [buf[sz:]]
+            _log.debug("return %s, rest=%s", sz, len(self.buf[0]))
+            return buf[:sz]
+        except StopIteration:
+            _log.debug("eof %s / %s", len(self.buf), sum([len(x) for x in self.buf]))
+            buf = self.buf
+            self.buf = []
+            self.eof = True
+            return b"".join(buf)
+
 
 class FileReadStream(Stream):
-    def __init__(self, file_like: io.RawIOBase, bufsize=1024*1024):
+    def __init__(self, file_like: io.RawIOBase, bufsize=10*1024*1024):
         self.fd = file_like
         self.bufsize = bufsize
 
@@ -79,6 +123,31 @@ class FileWriteStream(Stream):
     def gen(self):
         for i in self.prev.gen():
             yield self.fd.write(i)
+
+
+class S3GetStream(Stream):
+    def __init__(self, s3_client: boto3.client, bucket: str, key: str, bufsize=1024*1024):
+        self.obj = s3_client.get_object(Bucket=bucket, Key=key)
+        self.bufsize = bufsize
+
+    def gen(self):
+        yield from self.obj["Body"].iter_chunks(self.bufsize)
+
+
+class S3PutStream(Stream):
+    def __init__(self, prev_stream, s3_client: boto3.client, bucket: str, key: str, bufsize=1024*1024):
+        super().__init__(prev_stream)
+        self.client = s3_client
+        self.bucket = bucket
+        self.key = key
+        self.bufsize = bufsize
+        self.init_fp()
+        _log.debug("eof is %s", self.eof)
+
+    def gen(self):
+        _log.debug("gen: bucket=%s, key=%s", self.bucket, self.key)
+        self.client.upload_fileobj(self, self.bucket, self.key)
+        yield b""
 
 
 class SimpleFilterStream(Stream):
@@ -313,3 +382,26 @@ except ImportError:
 
 stream_ext = {v[0]: (k, *v[1:]) for k, v in stream_map.items()}
 stream_compress_modes = list(stream_map.keys()) + ["decompress", "raw"]
+
+
+def auto_compress_stream(ifname: pathlib.Path, mode: str, ifp: Optional[Stream] = None) -> Stream:
+    if ifp is None:
+        ifp = FileReadStream(ifname.open('br'))
+    if mode == "raw":
+        return ifp
+    _, ext = os.path.splitext(str(ifname))
+    # decompress
+    res: Stream = ifp
+    if ext in stream_ext:
+        imode, _, dst = stream_ext[ext]
+        if imode == mode:
+            return res
+        _log.debug("input mode: %s", imode)
+        res = dst(res)
+    if mode == "decompress":
+        return res
+    # compress
+    if mode in stream_map:
+        _, cst, _ = stream_map[mode]
+        res = cst(res)
+    return res

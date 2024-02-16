@@ -104,7 +104,7 @@ def verbose_option(func):
     @functools.wraps(func)
     def _(verbose, **kwargs):
         from logging import basicConfig
-        fmt = "%(asctime)s %(levelname)s %(message)s"
+        fmt = "%(asctime)s %(levelname)s %(name)s %(message)s"
         if verbose is None:
             basicConfig(level="INFO", format=fmt)
         elif verbose is False:
@@ -163,6 +163,8 @@ def allobjs_conf(s3: boto3.client, bucket_name: str, prefix: str, config: dict):
 @verbose_option
 def s3_list(s3: boto3.client, bucket_name: str, config: dict, top: pathlib.Path):
     """list S3 objects"""
+    if str(top) == ".":
+        top = ""
     for i in allobjs_conf(s3, bucket_name, str(top).lstrip("/"), config):
         click.echo("%s %6d %s" % (i["LastModified"], i["Size"], i["Key"]))
 
@@ -325,6 +327,23 @@ def s3_put_tree(s3: boto3.client, bucket_name: str, prefix: str, top: pathlib.Pa
     from .processor import S3Processor, process_walk
     proc = [S3Processor(config)]
     process_walk(top, proc)
+
+
+@cli.command()
+@s3_option
+@click.option("--key", required=True, help="AWS S3 Object Prefix")
+@click.argument("filename", type=click.Path(file_okay=True, dir_okay=False, exists=True))
+@click.option("--compress", default="gzip", type=click.Choice(compress_modes),
+              help="compress type", show_default=True)
+@verbose_option
+def s3_put1(s3: boto3.client, bucket_name: str, key: str, filename: str, compress: str):
+    """put 1 file to S3"""
+    from .compr_stream import S3PutStream, auto_compress_stream
+    input_path = pathlib.Path(filename)
+    st = auto_compress_stream(input_path, compress)
+    ost = S3PutStream(st, s3, bucket_name, key)
+    for _ in ost.gen():
+        pass
 
 
 def _s3_read(s3: boto3.client, bucket_name: str, key: str) -> bytes:
@@ -492,7 +511,7 @@ def compress_benchmark(compress, file):
 @cli.command()
 @click.option("--format", type=click.Choice(["combined", "common", "debug"]), default="combined", show_default=True)
 @click.option("--nth", type=int, default=1, show_default=True, help="parse from n-th '{'")
-@click.argument("file", type=click.File(), default=sys.stdin)
+@click.argument("file", type=click.Path(exists=True, file_okay=True, dir_okay=False))
 def traefik_json_convert(file, nth, format):
     """
     convert traefik access-log(json) to other format
@@ -502,6 +521,7 @@ def traefik_json_convert(file, nth, format):
         --accesslog.fields.defaultmode=keep \\
         --accesslog.fields.headers.defaultmode=keep
     """
+    from .compr_stream import FileReadStream, auto_compress_stream
     from collections import defaultdict
     common = "%(ClientHost)s - %(ClientUsername)s [%(httptime)s]" \
         " \"%(RequestMethod)s %(RequestPath)s %(RequestProtocol)s\"" \
@@ -516,8 +536,16 @@ def traefik_json_convert(file, nth, format):
         "common": common,
         "debug": "%s",
     }
+    if file in (None, "-"):
+        fp = sys.stdin.buffer
+        path = pathlib.Path("-")
+        ist = FileReadStream(fp)
+    else:
+        path = pathlib.Path(file)
+        ist = None
+    ofp = auto_compress_stream(path, "decompress", ist)
     fmt = format_map.get(format, combined)
-    for line in file:
+    for line in ofp.text_gen():
         n = line.split('{', nth)
         jsonstr = '{' + n[-1]
         try:
