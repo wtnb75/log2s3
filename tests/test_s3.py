@@ -305,7 +305,7 @@ class TestS3(unittest.TestCase):
         import gzip
         data = gzip.compress(bindata)
         read_mock = MagicMock()
-        read_mock.read.return_value = data
+        read_mock.iter_chunks.return_value = [data]
         with patch("boto3.client") as cl:
             cl.return_value.get_object.return_value = {
                 "Body": read_mock,
@@ -322,7 +322,7 @@ class TestS3(unittest.TestCase):
         import bz2
         data = bz2.compress(bindata)
         read_mock = MagicMock()
-        read_mock.read.return_value = data
+        read_mock.iter_chunks.return_value = [data]
         with patch("boto3.client") as cl:
             cl.return_value.get_object.return_value = {
                 "Body": read_mock,
@@ -340,7 +340,7 @@ class TestS3(unittest.TestCase):
         import bz2
         data = bz2.compress(bindata)
         read_mock = MagicMock()
-        read_mock.read.return_value = data
+        read_mock.iter_chunks.return_value = [data]
         with patch("boto3.client") as cl, \
                 patch("click.edit") as ed:
             cl.return_value.get_object.return_value = {
@@ -363,7 +363,7 @@ class TestS3(unittest.TestCase):
         import lzma
         data = lzma.compress(bindata, lzma.FORMAT_XZ)
         read_mock = MagicMock()
-        read_mock.read.return_value = data
+        read_mock.iter_chunks.return_value = [data]
         with patch("boto3.client") as cl, \
                 patch("click.edit") as ed, \
                 self.assertLogs(level="INFO") as alog:
@@ -383,7 +383,7 @@ class TestS3(unittest.TestCase):
         bindata = b'hello world\n' * 1024
         moddata = 'goodbye world\n' * 100
         read_mock = MagicMock()
-        read_mock.read.return_value = bindata
+        read_mock.iter_chunks.return_value = [bindata]
         with patch("boto3.client") as cl, \
                 patch("click.edit") as ed, \
                 self.assertLogs(level="INFO") as alog:

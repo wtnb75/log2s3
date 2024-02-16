@@ -11,6 +11,7 @@ import pathlib
 import boto3
 from .version import VERSION
 from .compr import compress_modes, auto_compress, do_chain
+from .compr_stream import Stream, S3GetStream, auto_compress_stream
 
 _log = getLogger(__name__)
 
@@ -35,6 +36,8 @@ def s3_option(func):
         if dotenv:
             from dotenv import load_dotenv
             load_dotenv()
+            if not s3_bucket:
+                s3_bucket = os.getenv("AWS_S3_BUCKET")
         args = {
             'aws_access_key_id': s3_access_key,
             'aws_secret_access_key': s3_secret_key,
@@ -277,13 +280,9 @@ def filetree_delete(top: pathlib.Path, config: dict):
     process_walk(top, proc)
 
 
-def init_bio(d: bytes) -> list[str, io.TextIOBase]:
-    r = io.TextIOWrapper(io.BytesIO(d))
-    return [next(r), r]
-
-
-def do_merge(input_data: list[bytes]):
-    input_files = [init_bio(x) for x in input_data]
+def do_merge(input_stream: list[Stream]):
+    txt_gens = [x.text_gen() for x in input_stream]
+    input_files = [[next(x), x] for x in txt_gens]
     input_files.sort(key=lambda f: f[0])
     while len(input_files) != 0:
         click.echo(input_files[0][0], nl=False)
@@ -302,21 +301,21 @@ def do_merge(input_data: list[bytes]):
 @verbose_option
 def merge(files: list[click.Path]):
     """merge sorted log files"""
-    input_data: list[bytes] = []
+    input_stream: list[Stream] = []
     for fn in files:
         p = pathlib.Path(fn)
         if p.is_file():
-            _, ch = auto_compress(p, "decompress")
-            input_data.append(do_chain(ch))
+            _, ch = auto_compress_stream(p, "decompress")
+            input_stream.append(ch)
         elif p.is_dir():
             for proot, _, pfiles in p.walk():
                 for pfn in pfiles:
-                    _, ch = auto_compress(proot / pfn, "decompress")
-                    input_data.append(do_chain(ch))
+                    _, ch = auto_compress_stream(proot / pfn, "decompress")
+                    input_stream.append(ch)
         else:
             _log.warning("%s is not a directory or file", p)
 
-    do_merge(input_data)
+    do_merge(input_stream)
 
 
 @cli.command()
@@ -337,7 +336,7 @@ def s3_put_tree(s3: boto3.client, bucket_name: str, prefix: str, top: pathlib.Pa
 
 @cli.command()
 @s3_option
-@click.option("--key", required=True, help="AWS S3 Object Prefix")
+@click.option("--key", required=True, help="AWS S3 Object Key")
 @click.argument("filename", type=click.Path(file_okay=True, dir_okay=False, exists=True))
 @click.option("--compress", default="gzip", type=click.Choice(compress_modes),
               help="compress type", show_default=True)
@@ -352,11 +351,10 @@ def s3_put1(s3: boto3.client, bucket_name: str, key: str, filename: str, compres
         pass
 
 
-def _s3_read(s3: boto3.client, bucket_name: str, key: str) -> bytes:
-    _, data = auto_compress(pathlib.Path(key), "decompress")
-    res = s3.get_object(Bucket=bucket_name, Key=key)
-    data[0] = res["Body"].read
-    return do_chain(data)
+def _s3_read_stream(s3: boto3.client, bucket_name: str, key: str) -> Stream:
+    res = S3GetStream(s3, bucket=bucket_name, key=key)
+    _, res = auto_compress_stream(pathlib.Path(key), "decompress", res)
+    return res
 
 
 @cli.command()
@@ -366,7 +364,8 @@ def _s3_read(s3: boto3.client, bucket_name: str, key: str) -> bytes:
 def s3_cat(s3: boto3.client, bucket_name: str, keys: list[str]):
     """concatinate compressed objects"""
     for key in keys:
-        sys.stdout.buffer.write(_s3_read(s3, bucket_name, key))
+        for d in _s3_read_stream(s3, bucket_name, key).gen():
+            sys.stdout.buffer.write(d)
 
 
 @cli.command()
@@ -375,7 +374,7 @@ def s3_cat(s3: boto3.client, bucket_name: str, keys: list[str]):
 @verbose_option
 def s3_less(s3: boto3.client, bucket_name: str, key: str):
     """view compressed object"""
-    click.echo_via_pager(_s3_read(s3, bucket_name, key).decode("utf-8"))
+    click.echo_via_pager(_s3_read_stream(s3, bucket_name, key).read_all().decode("utf-8"))
 
 
 @cli.command()
@@ -385,7 +384,7 @@ def s3_less(s3: boto3.client, bucket_name: str, key: str):
 @verbose_option
 def s3_vi(s3: boto3.client, bucket_name: str, key: str, dry):
     """edit compressed object and overwrite"""
-    bindata = _s3_read(s3, bucket_name, key).decode("utf-8")
+    bindata = _s3_read_stream(s3, bucket_name, key).read_all().decode("utf-8")
     from .compr import extcmp_map
     _, ext = os.path.splitext(key)
     if ext in extcmp_map:
@@ -410,11 +409,44 @@ def s3_vi(s3: boto3.client, bucket_name: str, key: str, dry):
 @verbose_option
 def s3_merge(s3: boto3.client, bucket_name: str, keys: list[str]):
     """merge sorted log objects"""
-    input_data = []
+    input_stream: list[Stream] = []
     for key in keys:
-        input_data.append(_s3_read(s3, bucket_name, key))
+        input_stream.append(_s3_read_stream(s3, bucket_name, key))
 
-    do_merge(input_data)
+    do_merge(input_stream)
+
+
+@cli.command()
+@s3_option
+@click.argument("keys", nargs=-1)
+@click.option("--dry/--wet", help="dry run or wet run", default=False, show_default=True)
+@verbose_option
+def s3_del(s3: boto3.client, bucket_name: str, keys: list[str], dry):
+    """delete objects"""
+    for k in keys:
+        res = s3.head_object(Bucket=bucket_name, Key=k)
+        click.echo("%s %s %s" % (res["LastModified"], res["ContentLength"], k))
+    if dry:
+        _log.info("(dry) delete %s keys", len(keys))
+    else:
+        _log.info("(wet) delete %s keys", len(keys))
+        s3.delete_objects(Bucket=bucket_name, Delete={"Objects": [{"Key": x} for x in keys]})
+
+
+@cli.command()
+@s3_option
+@verbose_option
+@click.option("--cleanup/--no-cleanup", default=False)
+def s3_list_parts(s3: boto3.client, bucket_name: str, cleanup):
+    """list in-progress multipart upload"""
+    res = s3.list_multipart_uploads(Bucket=bucket_name)
+    if len(res.get("Uploads", [])) == 0:
+        click.echo("(no in-progress multipart uploads found)")
+    for upl in res.get("Uploads", []):
+        click.echo("%s %s %s" % (upl["Initiated"], upl["UploadId"], upl["Key"]))
+        if cleanup:
+            _log.info("cleanup %s/%s", upl["Key"], upl["UploadId"])
+            s3.abort_multipart_upload(Bucket=bucket_name, Key=upl["Key"], UploadId=upl["UploadId"])
 
 
 @cli.command("cat")
@@ -423,8 +455,9 @@ def s3_merge(s3: boto3.client, bucket_name: str, keys: list[str]):
 def cat_file(files: list[click.Path]):
     """concatinate compressed files"""
     for fn in files:
-        _, data = auto_compress(pathlib.Path(fn), "decompress")
-        sys.stdout.buffer.write(do_chain(data))
+        _, data = auto_compress_stream(pathlib.Path(fn), "decompress")
+        for d in data.gen():
+            sys.stdout.buffer.write(d)
 
 
 @cli.command("less")
@@ -432,8 +465,8 @@ def cat_file(files: list[click.Path]):
 @verbose_option
 def view_file(filename: str):
     """view compressed file"""
-    _, data = auto_compress(pathlib.Path(filename), "decompress")
-    bindata = do_chain(data)
+    _, data = auto_compress_stream(pathlib.Path(filename), "decompress")
+    bindata = data.read_all()
     click.echo_via_pager(bindata.decode("utf-8"))
 
 
@@ -445,7 +478,7 @@ def edit_file(filename: str, dry):
     """edit compressed file and overwrite"""
     from .compr import extcmp_map
     fname = pathlib.Path(filename)
-    _, data = auto_compress(fname, "decompress")
+    _, data = auto_compress_stream(fname, "decompress")
     _, ext = os.path.splitext(fname)
     if ext in extcmp_map:
         compress_fn = extcmp_map[ext][2]
