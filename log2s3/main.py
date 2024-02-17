@@ -1,6 +1,5 @@
 from logging import getLogger
 import os
-import io
 import sys
 import datetime
 import subprocess
@@ -10,7 +9,7 @@ import json
 import pathlib
 import boto3
 from .version import VERSION
-from .compr import compress_modes, auto_compress, do_chain
+from .compr import compress_modes, do_chain
 from .compr_stream import Stream, S3GetStream, auto_compress_stream
 
 _log = getLogger(__name__)
