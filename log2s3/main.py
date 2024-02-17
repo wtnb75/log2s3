@@ -1,6 +1,5 @@
 from logging import getLogger
 import os
-import io
 import sys
 import datetime
 import subprocess
@@ -10,7 +9,8 @@ import json
 import pathlib
 import boto3
 from .version import VERSION
-from .compr import compress_modes, auto_compress, do_chain
+from .compr import compress_modes, do_chain
+from .compr_stream import Stream, S3GetStream, auto_compress_stream
 
 _log = getLogger(__name__)
 
@@ -35,6 +35,8 @@ def s3_option(func):
         if dotenv:
             from dotenv import load_dotenv
             load_dotenv()
+            if not s3_bucket:
+                s3_bucket = os.getenv("AWS_S3_BUCKET")
         args = {
             'aws_access_key_id': s3_access_key,
             'aws_secret_access_key': s3_secret_key,
@@ -57,11 +59,12 @@ def filetree_option(func):
     @click.option("--date", help="find date range(YYYY-mm-dd[..YYYY-mm-dd])")
     @click.option("--bigger", help="find bigger file")
     @click.option("--smaller", help="find smaller file")
+    @click.option("--glob", help="glob pattern")
     @click.option("--dry/--wet", help="dry run or wet run", default=False, show_default=True)
     @click.option("--compress", default="gzip", type=click.Choice(compress_modes),
                   help="compress type", show_default=True)
     @functools.wraps(func)
-    def _(top, older, newer, date, bigger, smaller, dry, compress, **kwargs):
+    def _(top, older, newer, date, bigger, smaller, glob, dry, compress, **kwargs):
         config = {
             "top": top,
             "older": older,
@@ -69,6 +72,7 @@ def filetree_option(func):
             "date": date,
             "bigger": bigger,
             "smaller": smaller,
+            "glob": glob,
             "dry": dry,
             "compress": compress,
         }
@@ -84,8 +88,9 @@ def s3tree_option(func):
     @click.option("--date", help="find date range(YYYY-mm-dd[..YYYY-mm-dd])")
     @click.option("--bigger", help="find bigger file")
     @click.option("--smaller", help="find smaller file")
+    @click.option("--glob", help="glob pattern")
     @functools.wraps(func)
-    def _(prefix, older, newer, date, bigger, smaller, suffix, **kwargs):
+    def _(prefix, older, newer, date, bigger, smaller, suffix, glob, **kwargs):
         config = {
             "top": prefix,
             "older": older,
@@ -94,6 +99,7 @@ def s3tree_option(func):
             "bigger": bigger,
             "smaller": smaller,
             "suffix": suffix,
+            "glob": glob,
         }
         return func(top=pathlib.Path(prefix), config=config, **kwargs)
     return _
@@ -104,7 +110,7 @@ def verbose_option(func):
     @functools.wraps(func)
     def _(verbose, **kwargs):
         from logging import basicConfig
-        fmt = "%(asctime)s %(levelname)s %(message)s"
+        fmt = "%(asctime)s %(levelname)s %(name)s %(message)s"
         if verbose is None:
             basicConfig(level="INFO", format=fmt)
         elif verbose is False:
@@ -130,7 +136,9 @@ def s3_make_bucket(s3: boto3.client, bucket_name: str):
 def s3_bucket(s3: boto3.client, bucket_name: str):
     """list S3 buckets"""
     res = s3.list_buckets()
-    click.echo(f"response {res}")
+    _log.debug("response %s", res)
+    for bkt in res.get("Buckets", []):
+        click.echo("%s %s" % (bkt["CreationDate"], bkt["Name"]))
 
 
 def allobjs(s3: boto3.client, bucket_name: str, prefix: str, marker: str = ''):
@@ -163,6 +171,8 @@ def allobjs_conf(s3: boto3.client, bucket_name: str, prefix: str, config: dict):
 @verbose_option
 def s3_list(s3: boto3.client, bucket_name: str, config: dict, top: pathlib.Path):
     """list S3 objects"""
+    if str(top) == ".":
+        top = ""
     for i in allobjs_conf(s3, bucket_name, str(top).lstrip("/"), config):
         click.echo("%s %6d %s" % (i["LastModified"], i["Size"], i["Key"]))
 
@@ -269,13 +279,9 @@ def filetree_delete(top: pathlib.Path, config: dict):
     process_walk(top, proc)
 
 
-def init_bio(d: bytes) -> list[str, io.TextIOBase]:
-    r = io.TextIOWrapper(io.BytesIO(d))
-    return [next(r), r]
-
-
-def do_merge(input_data: list[bytes]):
-    input_files = [init_bio(x) for x in input_data]
+def do_merge(input_stream: list[Stream]):
+    txt_gens = [x.text_gen() for x in input_stream]
+    input_files = [[next(x), x] for x in txt_gens]
     input_files.sort(key=lambda f: f[0])
     while len(input_files) != 0:
         click.echo(input_files[0][0], nl=False)
@@ -294,21 +300,21 @@ def do_merge(input_data: list[bytes]):
 @verbose_option
 def merge(files: list[click.Path]):
     """merge sorted log files"""
-    input_data: list[bytes] = []
+    input_stream: list[Stream] = []
     for fn in files:
         p = pathlib.Path(fn)
         if p.is_file():
-            _, ch = auto_compress(p, "decompress")
-            input_data.append(do_chain(ch))
+            _, ch = auto_compress_stream(p, "decompress")
+            input_stream.append(ch)
         elif p.is_dir():
             for proot, _, pfiles in p.walk():
                 for pfn in pfiles:
-                    _, ch = auto_compress(proot / pfn, "decompress")
-                    input_data.append(do_chain(ch))
+                    _, ch = auto_compress_stream(proot / pfn, "decompress")
+                    input_stream.append(ch)
         else:
             _log.warning("%s is not a directory or file", p)
 
-    do_merge(input_data)
+    do_merge(input_stream)
 
 
 @cli.command()
@@ -327,11 +333,27 @@ def s3_put_tree(s3: boto3.client, bucket_name: str, prefix: str, top: pathlib.Pa
     process_walk(top, proc)
 
 
-def _s3_read(s3: boto3.client, bucket_name: str, key: str) -> bytes:
-    _, data = auto_compress(pathlib.Path(key), "decompress")
-    res = s3.get_object(Bucket=bucket_name, Key=key)
-    data[0] = res["Body"].read
-    return do_chain(data)
+@cli.command()
+@s3_option
+@click.option("--key", required=True, help="AWS S3 Object Key")
+@click.argument("filename", type=click.Path(file_okay=True, dir_okay=False, exists=True))
+@click.option("--compress", default="gzip", type=click.Choice(compress_modes),
+              help="compress type", show_default=True)
+@verbose_option
+def s3_put1(s3: boto3.client, bucket_name: str, key: str, filename: str, compress: str):
+    """put 1 file to S3"""
+    from .compr_stream import S3PutStream, auto_compress_stream
+    input_path = pathlib.Path(filename)
+    _, st = auto_compress_stream(input_path, compress)
+    ost = S3PutStream(st, s3, bucket_name, key)
+    for _ in ost.gen():
+        pass
+
+
+def _s3_read_stream(s3: boto3.client, bucket_name: str, key: str) -> Stream:
+    res = S3GetStream(s3, bucket=bucket_name, key=key)
+    _, res = auto_compress_stream(pathlib.Path(key), "decompress", res)
+    return res
 
 
 @cli.command()
@@ -341,7 +363,8 @@ def _s3_read(s3: boto3.client, bucket_name: str, key: str) -> bytes:
 def s3_cat(s3: boto3.client, bucket_name: str, keys: list[str]):
     """concatinate compressed objects"""
     for key in keys:
-        sys.stdout.buffer.write(_s3_read(s3, bucket_name, key))
+        for d in _s3_read_stream(s3, bucket_name, key).gen():
+            sys.stdout.buffer.write(d)
 
 
 @cli.command()
@@ -350,7 +373,7 @@ def s3_cat(s3: boto3.client, bucket_name: str, keys: list[str]):
 @verbose_option
 def s3_less(s3: boto3.client, bucket_name: str, key: str):
     """view compressed object"""
-    click.echo_via_pager(_s3_read(s3, bucket_name, key).decode("utf-8"))
+    click.echo_via_pager(_s3_read_stream(s3, bucket_name, key).read_all().decode("utf-8"))
 
 
 @cli.command()
@@ -360,7 +383,7 @@ def s3_less(s3: boto3.client, bucket_name: str, key: str):
 @verbose_option
 def s3_vi(s3: boto3.client, bucket_name: str, key: str, dry):
     """edit compressed object and overwrite"""
-    bindata = _s3_read(s3, bucket_name, key).decode("utf-8")
+    bindata = _s3_read_stream(s3, bucket_name, key).read_all().decode("utf-8")
     from .compr import extcmp_map
     _, ext = os.path.splitext(key)
     if ext in extcmp_map:
@@ -385,11 +408,44 @@ def s3_vi(s3: boto3.client, bucket_name: str, key: str, dry):
 @verbose_option
 def s3_merge(s3: boto3.client, bucket_name: str, keys: list[str]):
     """merge sorted log objects"""
-    input_data = []
+    input_stream: list[Stream] = []
     for key in keys:
-        input_data.append(_s3_read(s3, bucket_name, key))
+        input_stream.append(_s3_read_stream(s3, bucket_name, key))
 
-    do_merge(input_data)
+    do_merge(input_stream)
+
+
+@cli.command()
+@s3_option
+@click.argument("keys", nargs=-1)
+@click.option("--dry/--wet", help="dry run or wet run", default=False, show_default=True)
+@verbose_option
+def s3_del(s3: boto3.client, bucket_name: str, keys: list[str], dry):
+    """delete objects"""
+    for k in keys:
+        res = s3.head_object(Bucket=bucket_name, Key=k)
+        click.echo("%s %s %s" % (res["LastModified"], res["ContentLength"], k))
+    if dry:
+        _log.info("(dry) delete %s keys", len(keys))
+    else:
+        _log.info("(wet) delete %s keys", len(keys))
+        s3.delete_objects(Bucket=bucket_name, Delete={"Objects": [{"Key": x} for x in keys]})
+
+
+@cli.command()
+@s3_option
+@verbose_option
+@click.option("--cleanup/--no-cleanup", default=False)
+def s3_list_parts(s3: boto3.client, bucket_name: str, cleanup):
+    """list in-progress multipart upload"""
+    res = s3.list_multipart_uploads(Bucket=bucket_name)
+    if len(res.get("Uploads", [])) == 0:
+        click.echo("(no in-progress multipart uploads found)")
+    for upl in res.get("Uploads", []):
+        click.echo("%s %s %s" % (upl["Initiated"], upl["UploadId"], upl["Key"]))
+        if cleanup:
+            _log.info("cleanup %s/%s", upl["Key"], upl["UploadId"])
+            s3.abort_multipart_upload(Bucket=bucket_name, Key=upl["Key"], UploadId=upl["UploadId"])
 
 
 @cli.command("cat")
@@ -398,8 +454,9 @@ def s3_merge(s3: boto3.client, bucket_name: str, keys: list[str]):
 def cat_file(files: list[click.Path]):
     """concatinate compressed files"""
     for fn in files:
-        _, data = auto_compress(pathlib.Path(fn), "decompress")
-        sys.stdout.buffer.write(do_chain(data))
+        _, data = auto_compress_stream(pathlib.Path(fn), "decompress")
+        for d in data.gen():
+            sys.stdout.buffer.write(d)
 
 
 @cli.command("less")
@@ -407,8 +464,8 @@ def cat_file(files: list[click.Path]):
 @verbose_option
 def view_file(filename: str):
     """view compressed file"""
-    _, data = auto_compress(pathlib.Path(filename), "decompress")
-    bindata = do_chain(data)
+    _, data = auto_compress_stream(pathlib.Path(filename), "decompress")
+    bindata = data.read_all()
     click.echo_via_pager(bindata.decode("utf-8"))
 
 
@@ -420,7 +477,7 @@ def edit_file(filename: str, dry):
     """edit compressed file and overwrite"""
     from .compr import extcmp_map
     fname = pathlib.Path(filename)
-    _, data = auto_compress(fname, "decompress")
+    _, data = auto_compress_stream(fname, "decompress")
     _, ext = os.path.splitext(fname)
     if ext in extcmp_map:
         compress_fn = extcmp_map[ext][2]
@@ -492,7 +549,7 @@ def compress_benchmark(compress, file):
 @cli.command()
 @click.option("--format", type=click.Choice(["combined", "common", "debug"]), default="combined", show_default=True)
 @click.option("--nth", type=int, default=1, show_default=True, help="parse from n-th '{'")
-@click.argument("file", type=click.File(), default=sys.stdin)
+@click.argument("file", type=click.Path(exists=True, file_okay=True, dir_okay=False))
 def traefik_json_convert(file, nth, format):
     """
     convert traefik access-log(json) to other format
@@ -502,6 +559,7 @@ def traefik_json_convert(file, nth, format):
         --accesslog.fields.defaultmode=keep \\
         --accesslog.fields.headers.defaultmode=keep
     """
+    from .compr_stream import FileReadStream, auto_compress_stream
     from collections import defaultdict
     common = "%(ClientHost)s - %(ClientUsername)s [%(httptime)s]" \
         " \"%(RequestMethod)s %(RequestPath)s %(RequestProtocol)s\"" \
@@ -516,8 +574,16 @@ def traefik_json_convert(file, nth, format):
         "common": common,
         "debug": "%s",
     }
+    if file in (None, "-"):
+        fp = sys.stdin.buffer
+        path = pathlib.Path("-")
+        ist = FileReadStream(fp)
+    else:
+        path = pathlib.Path(file)
+        ist = None
+    _, ofp = auto_compress_stream(path, "decompress", ist)
     fmt = format_map.get(format, combined)
-    for line in file:
+    for line in ofp.text_gen():
         n = line.split('{', nth)
         jsonstr = '{' + n[-1]
         try:
