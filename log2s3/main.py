@@ -428,7 +428,7 @@ def s3_cat(s3: boto3.client, bucket_name: str, keys: list[str]):
 
 
 def _data_via_pager(input: Stream):
-    pager_bin = os.getenv("PAGER", os.getenv("VIEWER", "less"))
+    pager_bin = os.getenv("LOG2S3_PAGER", os.getenv("PAGER", "less"))
     proc = subprocess.Popen(shlex.split(pager_bin), stdin=subprocess.PIPE)
     for d in input.gen():
         proc.stdin.write(d)
