@@ -2,6 +2,7 @@ from logging import getLogger
 import os
 import sys
 import datetime
+import shlex
 import subprocess
 import functools
 import click
@@ -426,13 +427,21 @@ def s3_cat(s3: boto3.client, bucket_name: str, keys: list[str]):
             sys.stdout.buffer.write(d)
 
 
+def _data_via_pager(input: Stream):
+    pager_bin = os.getenv("PAGER", os.getenv("VIEWER", "less"))
+    proc = subprocess.Popen(shlex.split(pager_bin), stdin=subprocess.PIPE)
+    for d in input.gen():
+        proc.stdin.write(d)
+    proc.communicate()
+
+
 @cli.command()
 @s3_option
 @click.argument("key")
 @verbose_option
 def s3_less(s3: boto3.client, bucket_name: str, key: str):
     """view compressed object"""
-    click.echo_via_pager(_s3_read_stream(s3, bucket_name, key).text_gen())
+    _data_via_pager(_s3_read_stream(s3, bucket_name, key))
 
 
 @cli.command()
@@ -535,7 +544,7 @@ def cat_file(files: list[click.Path]):
 def view_file(filename: str):
     """view compressed file"""
     _, data = auto_compress_stream(pathlib.Path(filename), "decompress")
-    click.echo_via_pager(data.text_gen())
+    _data_via_pager(data)
 
 
 @cli.command("vi")
