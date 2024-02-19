@@ -1,10 +1,12 @@
 import unittest
+from unittest.mock import ANY
 import tempfile
 import lzma
 import gzip
 import pathlib
 from log2s3.compr_stream import FileReadStream, FileWriteStream, \
-    RawReadStream, stream_map, auto_compress_stream
+    RawReadStream, stream_map, auto_compress_stream, \
+    S3PutStream
 
 
 class TestInOut(unittest.TestCase):
@@ -136,3 +138,25 @@ class TestAutoStream(unittest.TestCase):
             name, cst = auto_compress_stream(pathlib.Path("hello.xz"), "xz", st)
             self.assertEqual(xzdata, cst.read_all())
             self.assertEqual(str(name), "hello.xz")
+
+
+class TestS3Put(unittest.TestCase):
+    def setUp(self):
+        self.tf = tempfile.TemporaryFile("r+b")
+        self.tf.write(b"hello world\n" * 10240)  # 120KB
+        self.tf.flush()
+        self.tf.seek(0)
+
+    def tearDown(self):
+        del self.tf
+
+    def test_s3put(self):
+        import boto3
+        from botocore.stub import Stubber
+        rd = FileReadStream(self.tf, bufsize=1000)
+        s3if = boto3.client("s3")
+        with Stubber(s3if) as stubber:
+            stubber.add_response("put_object", {}, {"Body": ANY, "Bucket": "bucket123", "Key": "key123"})
+            ps = S3PutStream(rd, s3if, bucket="bucket123", key="key123", bufsize=1024)
+            for _ in ps.gen():
+                pass

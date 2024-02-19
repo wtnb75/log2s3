@@ -9,8 +9,8 @@ import json
 import pathlib
 import boto3
 from .version import VERSION
-from .compr import compress_modes, do_chain
-from .compr_stream import Stream, S3GetStream, auto_compress_stream
+from .compr_stream import Stream, S3GetStream, S3PutStream, \
+    auto_compress_stream, stream_compress_modes
 
 _log = getLogger(__name__)
 
@@ -61,7 +61,7 @@ def filetree_option(func):
     @click.option("--smaller", help="find smaller file")
     @click.option("--glob", help="glob pattern")
     @click.option("--dry/--wet", help="dry run or wet run", default=False, show_default=True)
-    @click.option("--compress", default="gzip", type=click.Choice(compress_modes),
+    @click.option("--compress", default="gzip", type=click.Choice(stream_compress_modes),
                   help="compress type", show_default=True)
     @functools.wraps(func)
     def _(top, older, newer, date, bigger, smaller, glob, dry, compress, **kwargs):
@@ -101,7 +101,9 @@ def s3tree_option(func):
             "suffix": suffix,
             "glob": glob,
         }
-        return func(top=pathlib.Path(prefix), config=config, **kwargs)
+        if prefix:
+            return func(top=pathlib.Path(prefix), config=config, **kwargs)
+        return func(top="", config=config, **kwargs)
     return _
 
 
@@ -158,6 +160,7 @@ def s3obj2stat(obj: dict) -> os.stat_result:
 
 
 def allobjs_conf(s3: boto3.client, bucket_name: str, prefix: str, config: dict):
+    _log.debug("allobjs: bucket=%s, prefix=%s, config=%s", bucket_name, prefix, config)
     from .processor import DebugProcessor
     dummy = DebugProcessor(config)
     suffix = config.get("suffix", "")
@@ -232,6 +235,62 @@ def s3_delete_by(s3: boto3.client, bucket_name: str, top: pathlib.Path, config: 
     else:
         _log.info("(wet)remove %s objects", len(del_keys))
         s3.delete_objects(Bucket=bucket_name, Delete={"Objects": [{"Key": x} for x in del_keys]})
+
+
+@cli.command()
+@s3_option
+@filetree_option
+@verbose_option
+@click.option("--prefix", default='', help="AWS S3 Object Prefix")
+@click.option("--content/--stat", help="diff content or stat", default=False, show_default=True)
+def s3_diff(s3: boto3.client, bucket_name: str, prefix: str, top: pathlib.Path, config: dict, content: bool):
+    """diff S3 and filetree"""
+    all_keys = {pathlib.Path(x["Key"][len(prefix):]): x for x in allobjs_conf(s3, bucket_name, prefix, config)}
+    from .processor import ListProcessor, process_walk
+    lp = ListProcessor(config)
+    process_walk(top, [lp])
+    files = {k.relative_to(top): v for k, v in lp.output}
+    for k in set(all_keys.keys())-set(files.keys()):
+        click.echo("only-s3: %s: %s" % (k, all_keys[k]))
+    for k in set(files.keys())-set(all_keys.keys()):
+        click.echo("only-file: %s: %s" % (k, files[k]))
+    for k in set(files.keys()) & set(all_keys.keys()):
+        if files[k].st_size != all_keys[k].get("Size"):
+            click.echo("size mismatch %s file=%s, obj=%s" % (
+                k, files[k].st_size, all_keys[k]["Size"]))
+
+
+@cli.command()
+@s3_option
+@s3tree_option
+@verbose_option
+@click.option("--compress", default="gzip", type=click.Choice(stream_compress_modes),
+              help="compress type", show_default=True)
+@click.option("--dry/--wet", help="dry run or wet run", default=False, show_default=True)
+@click.option("--keep/--remove", help="keep old file or delete", default=True, show_default=True)
+def s3_compress_tree(s3: boto3.client, bucket_name: str, config: dict, top: pathlib.Path,
+                     compress: str, dry: bool, keep: bool):
+    """compress S3 objects"""
+    if str(top) == ".":
+        top = ""
+    for i in allobjs_conf(s3, bucket_name, str(top).lstrip("/"), config):
+        rd = S3GetStream(s3, bucket=bucket_name, key=i["Key"])
+        newname, data = auto_compress_stream(pathlib.Path(i["Key"]), compress, rd)
+        if newname == i["Key"]:
+            _log.debug("do nothing: %s", i["Key"])
+            continue
+        if dry:
+            new_length = sum([len(x) for x in data.gen()])
+            _log.info("(dry) recompress %s -> %s (%s->%s)", i["Key"], newname, i["Size"], new_length)
+        else:
+            ps = S3PutStream(data, s3, bucket=bucket_name, key=str(newname))
+            for _ in ps.gen():
+                pass
+            res = s3.head_object(Bucket=bucket_name, Key=str(newname))
+            _log.info("(wet) recompress %s -> %s (%s->%s)", i["Key"], newname, i["Size"], res["ContentLength"])
+            if not keep:
+                _log.info("remove old %s (->%s)", i["Key"], newname)
+                s3.delete_object(Bucket=bucket_name, Key=i["Key"])
 
 
 @cli.command()
@@ -337,7 +396,7 @@ def s3_put_tree(s3: boto3.client, bucket_name: str, prefix: str, top: pathlib.Pa
 @s3_option
 @click.option("--key", required=True, help="AWS S3 Object Key")
 @click.argument("filename", type=click.Path(file_okay=True, dir_okay=False, exists=True))
-@click.option("--compress", default="gzip", type=click.Choice(compress_modes),
+@click.option("--compress", default="gzip", type=click.Choice(stream_compress_modes),
               help="compress type", show_default=True)
 @verbose_option
 def s3_put1(s3: boto3.client, bucket_name: str, key: str, filename: str, compress: str):
@@ -373,7 +432,7 @@ def s3_cat(s3: boto3.client, bucket_name: str, keys: list[str]):
 @verbose_option
 def s3_less(s3: boto3.client, bucket_name: str, key: str):
     """view compressed object"""
-    click.echo_via_pager(_s3_read_stream(s3, bucket_name, key).read_all().decode("utf-8"))
+    click.echo_via_pager(_s3_read_stream(s3, bucket_name, key).text_gen())
 
 
 @cli.command()
@@ -434,6 +493,17 @@ def s3_del(s3: boto3.client, bucket_name: str, keys: list[str], dry):
 
 @cli.command()
 @s3_option
+@click.argument("keys", nargs=-1)
+@verbose_option
+def s3_head(s3: boto3.client, bucket_name: str, keys: list[str]):
+    """delete objects"""
+    for k in keys:
+        res = s3.head_object(Bucket=bucket_name, Key=k)
+        click.echo(f"{k} = {res}")
+
+
+@cli.command()
+@s3_option
 @verbose_option
 @click.option("--cleanup/--no-cleanup", default=False)
 def s3_list_parts(s3: boto3.client, bucket_name: str, cleanup):
@@ -465,8 +535,7 @@ def cat_file(files: list[click.Path]):
 def view_file(filename: str):
     """view compressed file"""
     _, data = auto_compress_stream(pathlib.Path(filename), "decompress")
-    bindata = data.read_all()
-    click.echo_via_pager(bindata.decode("utf-8"))
+    click.echo_via_pager(data.text_gen())
 
 
 @cli.command("vi")
@@ -483,7 +552,7 @@ def edit_file(filename: str, dry):
         compress_fn = extcmp_map[ext][2]
     else:
         def compress_fn(f): return f
-    bindata = do_chain(data).decode('utf-8')
+    bindata = data.read_all().decode('utf-8')
     newdata = click.edit(text=bindata)
     if newdata is not None and newdata != bindata:
         if dry:
@@ -498,7 +567,7 @@ def edit_file(filename: str, dry):
 
 @cli.command()
 @click.argument("file")
-@click.option("--compress", default=None, type=click.Choice(set(compress_modes)-{"raw", "decompress"}),
+@click.option("--compress", default=None, type=click.Choice(set(stream_compress_modes)-{"raw", "decompress"}),
               help="compress type (default: all)", multiple=True)
 def compress_benchmark(compress, file):
     """benchmark compress algorithm
@@ -514,7 +583,7 @@ def compress_benchmark(compress, file):
     import timeit
     from .compr import modecmp_map
     if not compress:
-        compress = compress_modes
+        compress = stream_compress_modes
     input_data = pathlib.Path(file).read_bytes()
 
     def bench_comp():
