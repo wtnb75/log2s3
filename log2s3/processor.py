@@ -5,7 +5,7 @@ import shutil
 from logging import getLogger
 from typing import Optional
 from abc import ABC, abstractmethod
-from .compr import auto_compress, do_chain
+from .compr_stream import auto_compress_stream, FileWriteStream, S3PutStream
 import pytimeparse
 import humanfriendly
 import datetime
@@ -112,20 +112,24 @@ class DelProcessor(FileProcessor):
 class CompressProcessor(FileProcessor):
     def process(self, fname: pathlib.Path, stat: Optional[os.stat_result]) -> bool:
         compressor = self.config.get("compress", "gzip")
-        newname, data = auto_compress(fname, compressor)
+        newname, data = auto_compress_stream(fname, compressor)
         newpath = pathlib.Path(newname)
         if newpath == fname:
             _log.debug("unchanged: fname=%s, stat=%s", fname, stat)
             return False
         pfx = os.path.commonprefix([fname, newpath])
-        wr = do_chain(data)
         if self.config.get("dry", False):
+            out_length = sum([len(x) for x in data.gen()])
             _log.info("(dry) compress fname=%s{%s->%s}, size=%s->%s", pfx, str(fname)[len(pfx):],
-                      str(newpath)[len(pfx):], stat.st_size, len(wr))
+                      str(newpath)[len(pfx):], stat.st_size, out_length)
         else:
+            with newpath.open("wb") as ofp:
+                wrs = FileWriteStream(data, ofp)
+                for _ in wrs.gen():
+                    pass
+            out_length = newpath.stat().st_size
             _log.info("(wet) compress fname=%s{%s->%s}, size=%s->%s", pfx, str(fname)[len(pfx):],
-                      str(newpath)[len(pfx):], stat.st_size, len(wr))
-            newpath.write_bytes(wr)
+                      str(newpath)[len(pfx):], stat.st_size, out_length)
             shutil.copystat(fname, newpath, follow_symlinks=False)
             fname.unlink()
         return True
@@ -142,18 +146,22 @@ class S3Processor(FileProcessor):
 
     def process(self, fname: pathlib.Path, stat: Optional[os.stat_result]) -> bool:
         compressor = self.config.get("compress", "gzip")
-        newname, data = auto_compress(fname, compressor)
+        newname, data = auto_compress_stream(fname, compressor)
         newpath = pathlib.Path(newname)
         obj_name = self.prefix + str(newpath.relative_to(self.top))
         if obj_name in self.skip_names:
             _log.info("already exists: %s", obj_name)
             return True
-        wr = do_chain(data)
         if self.config.get("dry", False):
-            _log.info("(dry) upload %s -> %s (%d->%d)", fname, obj_name, stat.st_size, len(wr))
+            out_length = sum([len(x) for x in data.gen()])
+            _log.info("(dry) upload %s -> %s (%d->%d)", fname, obj_name, stat.st_size, out_length)
         else:
-            _log.info("upload %s -> %s (%d->%d)", fname, obj_name, stat.st_size, len(wr))
-            self.s3.put_object(Body=wr, Bucket=self.bucket, Key=obj_name)
+            outstr = S3PutStream(data, self.s3, bucket=self.bucket, key=obj_name)
+            for _ in outstr.gen():
+                pass
+            res = self.s3.head_object(Bucket=self.bucket, Key=obj_name)
+            out_length = res.get("ContentLength", 0)
+            _log.info("upload %s -> %s (%d->%d)", fname, obj_name, stat.st_size, out_length)
         return False
 
 

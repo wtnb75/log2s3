@@ -285,7 +285,7 @@ try:
             for i in self.prev.gen():
                 yield self.decompr.process(i)
 
-    stream_map["brotli"] = (".brotli", BrotliCompressorStream, BrotliDecompressorStream)
+    stream_map["brotli"] = (".br", BrotliCompressorStream, BrotliDecompressorStream)
 
 except ImportError:
     pass
