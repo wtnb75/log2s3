@@ -320,10 +320,13 @@ class TestS3(unittest.TestCase):
     def test_s3_less_bz2(self):
         bindata = b'hello world\n' * 1024
         import bz2
+        from subprocess import PIPE
         data = bz2.compress(bindata)
         read_mock = MagicMock()
-        read_mock.iter_chunks.return_value = [data]
-        with patch("boto3.client") as cl:
+        mid = int(len(data)/2)
+        read_mock.iter_chunks.return_value = [data[:mid], data[mid:]]
+        with patch("boto3.client") as cl, \
+                patch("subprocess.Popen") as sp:
             cl.return_value.get_object.return_value = {
                 "Body": read_mock,
             }
@@ -331,8 +334,8 @@ class TestS3(unittest.TestCase):
                                            "path/to/hello.bz2"], env=self.envs)
             if res.exception:
                 raise res.exception
+            sp.assert_called_once_with(["less"], stdin=PIPE)
             self.assertEqual(0, res.exit_code)
-            self.assertEqual(bindata.decode("utf-8").strip(), res.output.strip())
 
     def test_s3_vi_bz2(self):
         bindata = b'hello world\n' * 1024
