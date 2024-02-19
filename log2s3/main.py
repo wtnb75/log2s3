@@ -268,7 +268,8 @@ def s3_diff(s3: boto3.client, bucket_name: str, prefix: str, top: pathlib.Path, 
               help="compress type", show_default=True)
 @click.option("--dry/--wet", help="dry run or wet run", default=False, show_default=True)
 @click.option("--keep/--remove", help="keep old file or delete", default=True, show_default=True)
-def s3_compress_tree(s3: boto3.client, bucket_name: str, config: dict, top: pathlib.Path, compress: str, dry: bool, keep: bool):
+def s3_compress_tree(s3: boto3.client, bucket_name: str, config: dict, top: pathlib.Path,
+                     compress: str, dry: bool, keep: bool):
     """compress S3 objects"""
     if str(top) == ".":
         top = ""
