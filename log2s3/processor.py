@@ -148,20 +148,32 @@ class S3Processor(FileProcessor):
         compressor = self.config.get("compress", "gzip")
         newname, data = auto_compress_stream(fname, compressor)
         newpath = pathlib.Path(newname)
-        obj_name = self.prefix + str(newpath.relative_to(self.top))
+        base_name = newpath.relative_to(self.top)
+        base_from = fname.relative_to(self.top)
+        obj_name = self.prefix + str(base_name)
         if obj_name in self.skip_names:
-            _log.info("already exists: %s", obj_name)
+            _log.debug("already exists: %s", obj_name)
             return True
+        common_name = os.path.commonprefix([str(base_name), str(base_from)])
+        rest1 = str(base_from)[len(common_name):]
+        rest2 = str(base_name)[len(common_name):]
+        reststr = ""
+        if rest1 != rest2:
+            reststr = "{%s,%s}" % (rest1, rest2)
         if self.config.get("dry", False):
             out_length = sum([len(x) for x in data.gen()])
-            _log.info("(dry) upload %s -> %s (%d->%d)", fname, obj_name, stat.st_size, out_length)
+            _log.info("(dry) upload {%s,%s}%s%s (%d->%d)",
+                      self.top, self.prefix, common_name, reststr,
+                      stat.st_size, out_length)
         else:
             outstr = S3PutStream(data, self.s3, bucket=self.bucket, key=obj_name)
             for _ in outstr.gen():
                 pass
             res = self.s3.head_object(Bucket=self.bucket, Key=obj_name)
             out_length = res.get("ContentLength", 0)
-            _log.info("upload %s -> %s (%d->%d)", fname, obj_name, stat.st_size, out_length)
+            _log.info("(dry) upload {%s,%s}%s%s (%d->%d)",
+                      self.top, self.prefix, common_name, reststr,
+                      stat.st_size, out_length)
         return False
 
 
