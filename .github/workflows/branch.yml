@@ -10,7 +10,7 @@ jobs:
     steps:
     - uses: actions/checkout@master
     - name: prepare
-      shell: apt update && apt install -y libsnappy-dev liblzo2-dev
+      run: "apt update && apt install -y libsnappy-dev liblzo2-dev"
     - uses: wtnb75/actions/python@main
       with:
         pipinstall: ".[ext]"
