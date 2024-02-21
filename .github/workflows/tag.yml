@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@master
+    - name: prepare
+      run: "sudo apt update && sudo apt install -y libsnappy-dev liblzo2-dev"
     - name: versioning
       run: "echo \"VERSION = '${GITHUB_REF##*/v}'\" > log2s3/version.py"
     - uses: wtnb75/actions/python@main
