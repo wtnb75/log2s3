@@ -171,7 +171,7 @@ class S3Processor(FileProcessor):
                 pass
             res = self.s3.head_object(Bucket=self.bucket, Key=obj_name)
             out_length = res.get("ContentLength", 0)
-            _log.info("(dry) upload {%s,%s}%s%s (%d->%d)",
+            _log.info("(wet) upload {%s,%s}%s%s (%d->%d)",
                       self.top, self.prefix, common_name, reststr,
                       stat.st_size, out_length)
         return False
