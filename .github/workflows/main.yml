@@ -2,7 +2,7 @@ name: main
 
 on:
   push:
-    branches: [main, duplicate-page]
+    branches: [main]
 
 permissions:
   packages: write
