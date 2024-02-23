@@ -28,10 +28,6 @@ jobs:
         #pydist: dist
     - name: Setup Pages
       uses: actions/configure-pages@v4
-    - name: upload pages
-      uses: actions/upload-pages-artifact@v3
-      with:
-        path: ./publish
     - name: deploy pages
       uses: actions/deploy-pages@v4
       id: deployment
