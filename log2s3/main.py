@@ -314,7 +314,7 @@ def filetree_list(top: pathlib.Path, config: dict):
     from .processor import ListProcessor, process_walk
     lp = ListProcessor(config)
     process_walk(top, [lp])
-    click.echo("%10s %-19s %s" % ("size", "mtime", "name"))
+    click.echo("%10s %-19s %s    %d(+%d) total" % ("size", "mtime", "name", lp.processed, lp.skipped))
     click.echo("----------+-------------------+-----------------------")
     for p, st in lp.output:
         tmstr = datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
@@ -327,8 +327,12 @@ def filetree_list(top: pathlib.Path, config: dict):
 def filetree_compress(top: pathlib.Path, config: dict):
     """compress files"""
     from .processor import CompressProcessor, process_walk
-    proc = [CompressProcessor(config)]
+    cproc = CompressProcessor(config)
+    proc = [cproc]
     process_walk(top, proc)
+    _log.info("compressed=%d, skipped=%d, size=%d->%d (%d bytes)",
+              cproc.processed, cproc.skipped, cproc.before_total, cproc.after_total,
+              cproc.before_total-cproc.after_total)
 
 
 @cli.command()
@@ -339,6 +343,7 @@ def filetree_delete(top: pathlib.Path, config: dict):
     from .processor import DelProcessor, process_walk
     proc = [DelProcessor(config)]
     process_walk(top, proc)
+    _log.info("removed=%d, skipped=%d", proc[0].processed, proc[0].skipped)
 
 
 def do_merge(input_stream: list[Stream]):
@@ -393,6 +398,7 @@ def s3_put_tree(s3: boto3.client, bucket_name: str, prefix: str, top: pathlib.Pa
     from .processor import S3Processor, process_walk
     proc = [S3Processor(config)]
     process_walk(top, proc)
+    _log.info("processed=%d, skipped=%d, upload %d bytes", proc[0].processed, proc[0].skipped, proc[0].uploaded)
 
 
 @cli.command()

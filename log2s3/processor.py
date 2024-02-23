@@ -17,6 +17,8 @@ _log = getLogger(__name__)
 class FileProcessor(ABC):
     def __init__(self, config: dict = {}):
         self.config = {k: v for k, v in config.items() if v is not None}
+        self.processed = 0
+        self.skipped = 0
 
     def check_date_range(self, mtime: float) -> bool:
         if "older" in self.config:
@@ -70,8 +72,13 @@ class FileProcessor(ABC):
     def check(self, fname: pathlib.Path, stat: Optional[os.stat_result]) -> bool:
         if stat is None:
             stat = fname.stat()
-        return self.check_date_range(stat.st_mtime) and self.check_size_range(stat.st_size) and \
+        res = self.check_date_range(stat.st_mtime) and self.check_size_range(stat.st_size) and \
             self.check_name(fname)
+        if res:
+            self.processed += 1
+        else:
+            self.skipped += 1
+        return res
 
     @abstractmethod
     def process(self, fname: pathlib.Path, stat: Optional[os.stat_result]) -> bool:
@@ -110,16 +117,25 @@ class DelProcessor(FileProcessor):
 
 
 class CompressProcessor(FileProcessor):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.before_total = 0
+        self.after_total = 0
+
     def process(self, fname: pathlib.Path, stat: Optional[os.stat_result]) -> bool:
         compressor = self.config.get("compress", "gzip")
         newname, data = auto_compress_stream(fname, compressor)
         newpath = pathlib.Path(newname)
         if newpath == fname:
             _log.debug("unchanged: fname=%s, stat=%s", fname, stat)
+            self.skipped += 1
+            self.processed -= 1
             return False
         pfx = os.path.commonprefix([fname, newpath])
         if self.config.get("dry", False):
             out_length = sum([len(x) for x in data.gen()])
+            self.before_total += stat.st_size
+            self.after_total += out_length
             _log.info("(dry) compress fname=%s{%s->%s}, size=%s->%s", pfx, str(fname)[len(pfx):],
                       str(newpath)[len(pfx):], stat.st_size, out_length)
         else:
@@ -128,6 +144,8 @@ class CompressProcessor(FileProcessor):
                 for _ in wrs.gen():
                     pass
             out_length = newpath.stat().st_size
+            self.before_total += stat.st_size
+            self.after_total += out_length
             _log.info("(wet) compress fname=%s{%s->%s}, size=%s->%s", pfx, str(fname)[len(pfx):],
                       str(newpath)[len(pfx):], stat.st_size, out_length)
             shutil.copystat(fname, newpath, follow_symlinks=False)
@@ -143,6 +161,7 @@ class S3Processor(FileProcessor):
         self.bucket = config.get("s3_bucket")
         self.skip_names = config.get("skip_names")
         self.top = config.get("top")
+        self.uploaded = 0
 
     def process(self, fname: pathlib.Path, stat: Optional[os.stat_result]) -> bool:
         compressor = self.config.get("compress", "gzip")
@@ -162,6 +181,7 @@ class S3Processor(FileProcessor):
             reststr = "{%s,%s}" % (rest1, rest2)
         if self.config.get("dry", False):
             out_length = sum([len(x) for x in data.gen()])
+            self.uploaded += out_length
             _log.info("(dry) upload {%s,%s}%s%s (%d->%d)",
                       self.top, self.prefix, common_name, reststr,
                       stat.st_size, out_length)
@@ -171,6 +191,7 @@ class S3Processor(FileProcessor):
                 pass
             res = self.s3.head_object(Bucket=self.bucket, Key=obj_name)
             out_length = res.get("ContentLength", 0)
+            self.uploaded += out_length
             _log.info("(wet) upload {%s,%s}%s%s (%d->%d)",
                       self.top, self.prefix, common_name, reststr,
                       stat.st_size, out_length)
