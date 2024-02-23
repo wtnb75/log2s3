@@ -9,6 +9,8 @@ import click
 import json
 import pathlib
 import boto3
+import io
+from typing import Union, Generator
 from .version import VERSION
 from .compr_stream import Stream, S3GetStream, S3PutStream, \
     auto_compress_stream, stream_compress_modes
@@ -625,6 +627,7 @@ def compress_benchmark(compress, file):
 
 
 @cli.command()
+@verbose_option
 @click.option("--format", type=click.Choice(["combined", "common", "debug"]), default="combined", show_default=True)
 @click.option("--nth", type=int, default=1, show_default=True, help="parse from n-th '{'")
 @click.argument("file", type=click.Path(exists=True, file_okay=True, dir_okay=False))
@@ -671,6 +674,166 @@ def traefik_json_convert(file, nth, format):
             click.echo(fmt % defaultdict(lambda: "-", **jsdata))
         except json.JSONDecodeError:
             _log.exception("parse error: %s", jsonstr)
+
+
+def do_ible1(name: str, fn: click.Command, args: dict, dry: bool):
+    _log.debug("name=%s, fn=%s, args=%s, dry=%s", name, fn, args,  dry)
+    _log.info("start %s", name)
+    if dry:
+        _log.info("run(dry): %s %s", fn, args)
+    else:
+        _log.info("run(wet): %s %s", fn, args)
+        fn.callback(**args)
+    _log.info("end %s", name)
+
+
+def convert_ible(data: Union[list[dict], dict]) -> list[dict]:
+    if isinstance(data, dict):
+        d = []
+        _log.debug("convert %s", data)
+        for k, v in data.items():
+            name = v.pop("name", k)
+            allow_fail = v.pop("allow-fail", None)
+            ent = {"name": name, k: v}
+            if allow_fail is not None:
+                ent["allow-fail"] = allow_fail
+            d.append(ent)
+        _log.debug("converted: %s", d)
+        data = d
+    return data
+
+
+def arg2arg(fn: click.Command, args: dict, baseparam: dict) -> dict:
+    params = {}
+    for opt in fn.params:
+        if opt.default or not opt.required:
+            params[opt.name] = opt.default
+    pnames = [x.name for x in fn.params]
+    for name in pnames:
+        if name in args:
+            params[name] = args[name]
+        elif name in baseparam:
+            params[name] = baseparam[name]
+    return params
+
+
+def ible_gen(data: list[dict]) -> Generator[tuple[str, click.Command, dict, dict], None, None]:
+    _log.debug("input: %s", data)
+    if not isinstance(data, list):
+        raise Exception(f"invalid list style: {type(data)}")
+    baseparam = {}
+    for v in data:
+        _log.debug("exec %s", v)
+        if not isinstance(v, dict):
+            raise Exception(f"invalid dict style: {type(v)}")
+        kw: set[str] = v.keys()-{"name", "allow-fail"}
+        if len(kw) != 1:
+            raise Exception(f"invalid command style: {kw}")
+        cmd: str = kw.pop()
+        args: dict = v[cmd]
+        name: str = v.get("name", cmd)
+        if not isinstance(args, dict):
+            raise Exception(f"invalid args: {args}")
+        if cmd == "params":
+            baseparam.update(args)
+            continue
+        if cmd not in cli.commands:
+            raise Exception(f"invalid command: {cmd} / {cli.commands.keys()}")
+        if cmd.startswith("ible"):
+            raise Exception(f"unsupported command: {cmd}")
+        fn = cli.commands[cmd]
+        yield name, fn, arg2arg(fn, args, baseparam), v
+
+
+def do_ible(data: list[dict], dry: bool):
+    for name, fn, args, v in ible_gen(data):
+        try:
+            do_ible1(name, fn, args, dry)
+        except Exception as e:
+            if not v.get("allow-fail"):
+                _log.exception("error occured. stop")
+                raise
+            _log.info("failed. continue: %s", e)
+
+
+def try_read(file: str) -> Union[list[dict], dict]:
+    try:
+        import tomllib
+        with open(file, "rb") as fp:
+            return tomllib.load(fp)
+    except ValueError as e:
+        _log.debug("toml error", exc_info=e)
+    try:
+        import yaml
+        with open(file, "rb") as fp:
+            return yaml.safe_load(fp)
+    except (ValueError, ImportError) as e:
+        _log.debug("yaml error", exc_info=e)
+    try:
+        import json
+        with open(file, "rb") as fp:
+            return json.load(fp)
+    except ValueError as e:
+        _log.debug("json error", exc_info=e)
+    raise Exception(f"cannot load {file}: unknown filetype")
+
+
+@cli.command()
+@verbose_option
+@click.option("--dry/--wet", help="dry run or wet run", default=False, show_default=True)
+@click.argument("file", type=click.Path(file_okay=True, dir_okay=False, readable=True, exists=True))
+def ible_playbook(file, dry):
+    """do log2s3-ible playbook"""
+    do_ible(convert_ible(try_read(file)), dry)
+
+
+def sh_dump(data, output):
+    click.echo("#! /bin/sh", file=output)
+    click.echo("set -eu", file=output)
+    click.echo("", file=output)
+    for name, fn, args, v in ible_gen(data):
+        allow_fail = v.get("allow-fail")
+        for comment in io.StringIO(name):
+            click.echo(f"# {comment.rstrip()}", file=output)
+        options = [fn.name]
+        for k, v in args.items():
+            opt = [x for x in fn.params if x.name == k][0]
+            if opt.default == v:
+                continue
+            if isinstance(v, bool):
+                if v:
+                    options.append(opt.opts[0])
+                else:
+                    options.append(opt.secondary_opts[0])
+            elif v is not None:
+                options.append(opt.opts[0])
+                options.append(v)
+        optstr = shlex.join(options)
+        suffixstr = ""
+        if allow_fail:
+            suffixstr = " || true"
+        click.echo(f"log2s3 {optstr}{suffixstr}", file=output)
+        click.echo("", file=output)
+
+
+@cli.command()
+@verbose_option
+@click.option("--format", type=click.Choice(["yaml", "json", "sh"]))
+@click.argument("file", type=click.Path(file_okay=True, dir_okay=False, readable=True, exists=True))
+@click.option("--output", type=click.File("w"), default="-")
+def ible_convert(file, format, output):
+    """convert log2s3-ible playbook"""
+    data: list[dict] = convert_ible(try_read(file))
+    if format == "yaml":
+        import yaml
+        yaml.dump(data, stream=output, allow_unicode=True)
+    elif format == "json":
+        import json
+        json.dump(data, fp=output, ensure_ascii=False, indent=2)
+    elif format == "sh":
+        sh_dump(data, output)
+    else:
+        raise Exception(f"unknown format: {format}")
 
 
 @cli.command()

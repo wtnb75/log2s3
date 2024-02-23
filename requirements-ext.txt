@@ -7,3 +7,4 @@ python-snappy
 python-lzo
 pyzpaq
 zlib-ng
+PyYAML
