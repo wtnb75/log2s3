@@ -91,12 +91,16 @@ log2s3 filetree-delete --older 400d --compress xz --top /var/log/container
             self.assertEqual(self.jsonlist, data)
 
     def test_convert_toml2sh(self):
-        with tempfile.NamedTemporaryFile("r+") as tf:
+        with tempfile.NamedTemporaryFile("r+") as tf, \
+                patch("os.getenv") as og:
+            og.return_value = None
             tf.write(self.toml)
             tf.flush()
             res = CliRunner().invoke(cli, ["ible-convert", tf.name, "--format", "sh"])
             if res.exception:
                 raise res.exception
+            og.assert_any_call("AWS_ACCESS_KEY_ID")
+            og.assert_any_call("AWS_ENDPOINT_URL_S3")
             self.assertEqual(self.shstr, res.output)
 
     def test_playbook_dry(self):
@@ -116,11 +120,15 @@ log2s3 filetree-delete --older 400d --compress xz --top /var/log/container
             with self.assertLogs(level="INFO") as alog, \
                     patch("log2s3.main.filetree_compress.callback") as fc, \
                     patch("log2s3.main.s3_put_tree.callback") as spt, \
-                    patch("log2s3.main.filetree_delete.callback") as fd:
+                    patch("log2s3.main.filetree_delete.callback") as fd, \
+                    patch("os.getenv") as og:
+                og.return_value = None
                 res = CliRunner().invoke(cli, ["ible-playbook", tf.name])
             if res.exception:
                 raise res.exception
             self.assertNotIn("(dry)", "\n".join(alog.output))
+            og.assert_any_call("AWS_ACCESS_KEY_ID")
+            og.assert_any_call("AWS_ENDPOINT_URL_S3")
             fc.assert_called_once()
             self.assertEqual(
                 {"older": "1d", "newer": "7d", "bigger": "10k", "top": "/var/log/container",
