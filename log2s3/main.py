@@ -712,7 +712,9 @@ def convert_ible(data: Union[list[dict], dict]) -> list[dict]:
 def arg2arg(fn: click.Command, args: dict, baseparam: dict) -> dict:
     params = {}
     for opt in fn.params:
-        if opt.default or not opt.required:
+        if opt.envvar and os.getenv(opt.envvar):
+            params[opt.name] = os.getenv(opt.envvar)
+        elif opt.default or not opt.required:
             params[opt.name] = opt.default
     pnames = [x.name for x in fn.params]
     for name in pnames:
