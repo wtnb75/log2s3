@@ -54,6 +54,11 @@ def s3_option(func):
     return _
 
 
+compress_option = click.option(
+    "--compress", default="gzip", type=click.Choice(stream_compress_modes),
+    help="compress type", show_default=True)
+
+
 def filetree_option(func):
     @click.option("--top", type=click.Path(dir_okay=True, exists=True, file_okay=False), required=True,
                   help="root directory to find files")
@@ -64,10 +69,8 @@ def filetree_option(func):
     @click.option("--smaller", help="find smaller file")
     @click.option("--glob", help="glob pattern")
     @click.option("--dry/--wet", help="dry run or wet run", default=False, show_default=True)
-    @click.option("--compress", default="gzip", type=click.Choice(stream_compress_modes),
-                  help="compress type", show_default=True)
     @functools.wraps(func)
-    def _(top, older, newer, date, bigger, smaller, glob, dry, compress, **kwargs):
+    def _(top, older, newer, date, bigger, smaller, glob, dry, **kwargs):
         config = {
             "top": top,
             "older": older,
@@ -77,7 +80,6 @@ def filetree_option(func):
             "smaller": smaller,
             "glob": glob,
             "dry": dry,
-            "compress": compress,
         }
         return func(top=pathlib.Path(top), config=config, **kwargs)
     return _
@@ -267,8 +269,7 @@ def s3_diff(s3: boto3.client, bucket_name: str, prefix: str, top: pathlib.Path, 
 @s3_option
 @s3tree_option
 @verbose_option
-@click.option("--compress", default="gzip", type=click.Choice(stream_compress_modes),
-              help="compress type", show_default=True)
+@compress_option
 @click.option("--dry/--wet", help="dry run or wet run", default=False, show_default=True)
 @click.option("--keep/--remove", help="keep old file or delete", default=True, show_default=True)
 def s3_compress_tree(s3: boto3.client, bucket_name: str, config: dict, top: pathlib.Path,
@@ -323,9 +324,12 @@ def filetree_list(top: pathlib.Path, config: dict):
 
 @cli.command()
 @filetree_option
+@compress_option
 @verbose_option
-def filetree_compress(top: pathlib.Path, config: dict):
+def filetree_compress(top: pathlib.Path, config: dict, compress):
     """compress files"""
+    if compress:
+        config["compress"] = compress
     from .processor import CompressProcessor, process_walk
     cproc = CompressProcessor(config)
     proc = [cproc]
@@ -388,13 +392,15 @@ def merge(files: list[click.Path]):
 @s3_option
 @click.option("--prefix", default='', help="AWS S3 Object Prefix")
 @filetree_option
+@compress_option
 @verbose_option
-def s3_put_tree(s3: boto3.client, bucket_name: str, prefix: str, top: pathlib.Path, config: dict):
+def s3_put_tree(s3: boto3.client, bucket_name: str, prefix: str, top: pathlib.Path, config: dict, compress):
     """compress and put log files to S3"""
     config["s3"] = s3
     config["s3_bucket"] = bucket_name
     config["s3_prefix"] = prefix
     config["skip_names"] = {x["Key"] for x in allobjs(s3, bucket_name, prefix)}
+    config["compress"] = compress
     from .processor import S3Processor, process_walk
     proc = [S3Processor(config)]
     process_walk(top, proc)
@@ -405,8 +411,7 @@ def s3_put_tree(s3: boto3.client, bucket_name: str, prefix: str, top: pathlib.Pa
 @s3_option
 @click.option("--key", required=True, help="AWS S3 Object Key")
 @click.argument("filename", type=click.Path(file_okay=True, dir_okay=False, exists=True))
-@click.option("--compress", default="gzip", type=click.Choice(stream_compress_modes),
-              help="compress type", show_default=True)
+@compress_option
 @verbose_option
 def s3_put1(s3: boto3.client, bucket_name: str, key: str, filename: str, compress: str):
     """put 1 file to S3"""
@@ -764,6 +769,85 @@ def do_ible(data: list[dict], dry: bool):
             _log.info("failed. continue: %s", e)
 
 
+def gen_sh(file: str) -> Generator[tuple[str, list[str]], None, None]:
+    with open(file, "r") as fp:
+        name = None
+        for line in fp:
+            line = line.lstrip().rstrip("\n")
+            _log.debug("LINE: %s", line)
+            if line.startswith("#"):
+                name = line.lstrip()[1:].strip()
+                _log.debug("name: %s", name)
+                continue
+            tokens = list(shlex.shlex(line, punctuation_chars=True))
+            while len(tokens) != 0 and tokens[-1] == "\\":
+                try:
+                    line += next(fp)
+                except StopIteration:
+                    break
+                tokens = list(shlex.shlex(line, punctuation_chars=True))
+            if len(tokens) == 0:
+                continue
+            yield name, tokens
+
+
+def sh_line2arg(cmdop: click.Command, tokens: list[str]) -> tuple[dict, bool]:
+    args = {}
+    allow_fail = False
+    if tokens[-2:] == ["||", "true"]:
+        allow_fail = True
+        tokens = tokens[:-2]
+        _log.debug("allow fail: %s", tokens)
+    tks = iter(tokens)
+    for token in tks:
+        if token.startswith("#"):
+            # comment
+            break
+        for opt in cmdop.params:
+            if token in opt.opts:
+                _log.debug("option %s", opt)
+                if opt.is_flag:
+                    _log.debug("true: %s", opt)
+                    args[opt.name] = True
+                else:
+                    val = next(tks)
+                    _log.debug("args: %s=%s", opt, val)
+                    args[opt.name] = val
+                break
+            elif token in opt.secondary_opts:
+                _log.debug("false: %s", opt)
+                args[opt.name] = False
+                break
+        else:
+            raise Exception(f"no such option: {token}")
+    return args, allow_fail
+
+
+def read_sh(file: str) -> list[dict]:
+    res: list[dict] = []
+    for name, tokens in gen_sh(file):
+        if len(tokens) <= 1:
+            continue
+        if tokens[0] != "log2s3":
+            continue
+        _log.debug("tokens: %s", tokens[1:])
+        cmd = tokens[1]
+        if cmd not in cli.commands:
+            raise Exception(f"no such subcommand: {cmd}")
+        cmdop = cli.commands[cmd]
+        args, allow_fail = sh_line2arg(cmdop, tokens[2:])
+        _log.debug("result args: %s", args)
+        ent = {
+            "name": name or cmd,
+            cmd: args,
+        }
+        if allow_fail:
+            ent["allow-fail"] = True
+        res.append(ent)
+        name = None
+    return res
+
+
 def try_read(file: str) -> Union[list[dict], dict]:
     try:
         import tomllib
@@ -775,7 +859,7 @@ def try_read(file: str) -> Union[list[dict], dict]:
         import yaml
         with open(file, "rb") as fp:
             return yaml.safe_load(fp)
-    except (ValueError, ImportError) as e:
+    except (yaml.parser.ParserError, ImportError) as e:
         _log.debug("yaml error", exc_info=e)
     try:
         import json
@@ -783,6 +867,10 @@ def try_read(file: str) -> Union[list[dict], dict]:
             return json.load(fp)
     except ValueError as e:
         _log.debug("json error", exc_info=e)
+    try:
+        return read_sh(file)
+    except Exception as e:
+        _log.debug("sh error", exc_info=e)
     raise Exception(f"cannot load {file}: unknown filetype")
 
 
