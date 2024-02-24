@@ -63,6 +63,35 @@ older = "400d"
             "older": "400d",
         },
     }]
+    jsonlist_ex = [{
+        "name": "compress old files",
+        "filetree-compress": {
+            "older": "1d",
+            "newer": "7d",
+            "bigger": "10k",
+            "compress": "xz",
+            "top": "/var/log/container",
+        },
+    }, {
+        "name": "make bucket",
+        "allow-fail": True,
+        "s3-make-bucket": {"dotenv": True},
+    }, {
+        "name": "upload older files",
+        "s3-put-tree": {
+            "older": "2d",
+            "newer": "7d",
+            "compress": "xz",
+            "top": "/var/log/container",
+            "dotenv": True,
+        },
+    }, {
+        "name": "delete oldest files",
+        "filetree-delete": {
+            "older": "400d",
+            "top": "/var/log/container",
+        },
+    }]
     shstr = """#! /bin/sh
 set -eu
 
@@ -76,7 +105,7 @@ log2s3 s3-make-bucket --dotenv || true
 log2s3 s3-put-tree --dotenv --older 2d --newer 7d --compress xz --top /var/log/container
 
 # delete oldest files
-log2s3 filetree-delete --older 400d --compress xz --top /var/log/container
+log2s3 filetree-delete --older 400d --top /var/log/container
 
 """
 
@@ -102,6 +131,15 @@ log2s3 filetree-delete --older 400d --compress xz --top /var/log/container
             og.assert_any_call("AWS_ACCESS_KEY_ID")
             og.assert_any_call("AWS_ENDPOINT_URL_S3")
             self.assertEqual(self.shstr, res.output)
+
+    def test_convert_sh2json(self):
+        with tempfile.NamedTemporaryFile("r+") as tf:
+            tf.write(self.shstr)
+            tf.flush()
+            res = CliRunner().invoke(cli, ["ible-convert", tf.name, "--format", "json"])
+            if res.exception:
+                raise res.exception
+            self.assertEqual(self.jsonlist_ex, json.loads(res.output))
 
     def test_playbook_dry(self):
         with tempfile.NamedTemporaryFile("r+") as tf:
@@ -140,7 +178,6 @@ log2s3 filetree-delete --older 400d --compress xz --top /var/log/container
                  "compress": "xz", "dotenv": True},
                 {k: v for k, v in spt.call_args.kwargs.items() if bool(v)})
             fd.assert_called_once()
-            self.assertEqual({
-                "older": "400d", "top": "/var/log/container",
-                "compress": "xz",  # need no compress option...
-            }, {k: v for k, v in fd.call_args.kwargs.items() if bool(v)})
+            self.assertEqual(
+                {"older": "400d", "top": "/var/log/container"},
+                {k: v for k, v in fd.call_args.kwargs.items() if bool(v)})
