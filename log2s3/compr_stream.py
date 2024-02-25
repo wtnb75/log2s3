@@ -6,7 +6,6 @@ from typing import Optional, Generator
 from logging import getLogger
 import io
 import os
-from botocore.response import StreamingBody
 try:
     from mypy_boto3_s3.client import S3Client as S3ClientType
 except ImportError:
