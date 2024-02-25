@@ -3,12 +3,16 @@ import pathlib
 import time
 import shutil
 from logging import getLogger
-from typing import Optional
+from typing import Optional, Sequence
 from abc import ABC, abstractmethod
 from .compr_stream import auto_compress_stream, FileWriteStream, S3PutStream
 import pytimeparse
 import humanfriendly
 import datetime
+try:
+    from mypy_boto3_s3.client import S3Client as S3ClientType
+except ImportError:
+    from typing import Any as S3ClientType
 
 
 _log = getLogger(__name__)
@@ -23,11 +27,11 @@ class FileProcessor(ABC):
     def check_date_range(self, mtime: float) -> bool:
         if "older" in self.config:
             older = pytimeparse.parse(self.config["older"])
-            if mtime > time.time()-older:
+            if older is not None and mtime > time.time()-older:
                 return False
         if "newer" in self.config:
             newer = pytimeparse.parse(self.config["newer"])
-            if mtime < time.time()-newer:
+            if newer is not None and mtime < time.time()-newer:
                 return False
         if "date" in self.config:
             mtime_datetime = datetime.datetime.fromtimestamp(mtime)
@@ -99,7 +103,7 @@ class DebugProcessor(FileProcessor):
 class ListProcessor(FileProcessor):
     def __init__(self, config: dict = {}):
         super().__init__(config)
-        self.output: list[tuple[pathlib.Path, os.stat_result]] = []
+        self.output: list[tuple[pathlib.Path, Optional[os.stat_result]]] = []
 
     def process(self, fname: pathlib.Path, stat: Optional[os.stat_result]) -> bool:
         self.output.append((fname, stat))
@@ -132,22 +136,26 @@ class CompressProcessor(FileProcessor):
             self.processed -= 1
             return False
         pfx = os.path.commonprefix([fname, newpath])
+        if isinstance(stat, os.stat_result):
+            before_sz = stat.st_size
+        else:
+            before_sz = 0
         if self.config.get("dry", False):
             out_length = sum([len(x) for x in data.gen()])
-            self.before_total += stat.st_size
+            self.before_total += before_sz
             self.after_total += out_length
             _log.info("(dry) compress fname=%s{%s->%s}, size=%s->%s", pfx, str(fname)[len(pfx):],
-                      str(newpath)[len(pfx):], stat.st_size, out_length)
+                      str(newpath)[len(pfx):], before_sz, out_length)
         else:
             with newpath.open("wb") as ofp:
                 wrs = FileWriteStream(data, ofp)
                 for _ in wrs.gen():
                     pass
             out_length = newpath.stat().st_size
-            self.before_total += stat.st_size
+            self.before_total += before_sz
             self.after_total += out_length
             _log.info("(wet) compress fname=%s{%s->%s}, size=%s->%s", pfx, str(fname)[len(pfx):],
-                      str(newpath)[len(pfx):], stat.st_size, out_length)
+                      str(newpath)[len(pfx):], before_sz, out_length)
             shutil.copystat(fname, newpath, follow_symlinks=False)
             fname.unlink()
         return True
@@ -156,11 +164,11 @@ class CompressProcessor(FileProcessor):
 class S3Processor(FileProcessor):
     def __init__(self, config):
         super().__init__(config)
-        self.s3 = config.get("s3")
-        self.prefix = config.get("s3_prefix")
-        self.bucket = config.get("s3_bucket")
-        self.skip_names = config.get("skip_names")
-        self.top = config.get("top")
+        self.s3: S3ClientType = config.get("s3")
+        self.prefix = config.get("s3_prefix", "")
+        self.bucket: str = config["s3_bucket"]
+        self.skip_names = config.get("skip_names", [])
+        self.top = config["top"]
         self.uploaded = 0
 
     def process(self, fname: pathlib.Path, stat: Optional[os.stat_result]) -> bool:
@@ -179,12 +187,16 @@ class S3Processor(FileProcessor):
         reststr = ""
         if rest1 != rest2:
             reststr = "{%s,%s}" % (rest1, rest2)
+        if isinstance(stat, os.stat_result):
+            before_sz = stat.st_size
+        else:
+            before_sz = 0
         if self.config.get("dry", False):
             out_length = sum([len(x) for x in data.gen()])
             self.uploaded += out_length
             _log.info("(dry) upload {%s,%s}%s%s (%d->%d)",
                       self.top, self.prefix, common_name, reststr,
-                      stat.st_size, out_length)
+                      before_sz, out_length)
         else:
             outstr = S3PutStream(data, self.s3, bucket=self.bucket, key=obj_name)
             for _ in outstr.gen():
@@ -194,11 +206,11 @@ class S3Processor(FileProcessor):
             self.uploaded += out_length
             _log.info("(wet) upload {%s,%s}%s%s (%d->%d)",
                       self.top, self.prefix, common_name, reststr,
-                      stat.st_size, out_length)
+                      before_sz, out_length)
         return False
 
 
-def process_walk(top: pathlib.Path, processors: list[FileProcessor]):
+def process_walk(top: pathlib.Path, processors: Sequence[FileProcessor]):
     for root, dirs, files in os.walk(top):
         for f in files:
             p = pathlib.Path(root, f)
