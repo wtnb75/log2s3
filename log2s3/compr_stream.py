@@ -2,11 +2,15 @@ import lzma
 import bz2
 import gzip
 import pathlib
-from typing import Optional
+from typing import Optional, Generator
 from logging import getLogger
-import boto3
 import io
 import os
+from botocore.response import StreamingBody
+try:
+    from mypy_boto3_s3.client import S3Client as S3ClientType
+except ImportError:
+    from typing import Any as S3ClientType
 
 _log = getLogger(__name__)
 
@@ -22,7 +26,7 @@ class Stream:
         self.eof = False
 
     # work as pass-thru stream
-    def gen(self):
+    def gen(self) -> Generator[bytes, None, None]:
         """read part generator"""
         yield from self.prev.gen()
 
@@ -35,7 +39,7 @@ class Stream:
         _log.debug("finish read")
         return buf.getvalue()
 
-    def text_gen(self):
+    def text_gen(self) -> Generator[str, None, None]:
         """readline generator"""
         rest = b""
         for i in self.gen():
@@ -87,16 +91,16 @@ class Stream:
 
 
 class FileReadStream(Stream):
-    def __init__(self, file_like: io.RawIOBase, bufsize=10*1024*1024):
+    def __init__(self, file_like: io.RawIOBase | io.BufferedReader, bufsize=10*1024*1024):
         self.fd = file_like
         self.bufsize = bufsize
 
     def gen(self):
         while True:
             data = self.fd.read(self.bufsize)
-            _log.debug("read file %d", len(data))
-            if len(data) == 0:
+            if data is None or len(data) == 0:
                 break
+            _log.debug("read file %d", len(data))
             yield data
 
 
@@ -115,7 +119,7 @@ class RawReadStream(Stream):
 
 
 class FileWriteStream(Stream):
-    def __init__(self, prev_stream, file_like: io.RawIOBase, bufsize=1024*1024):
+    def __init__(self, prev_stream, file_like: io.RawIOBase | io.BufferedWriter, bufsize=1024*1024):
         super().__init__(prev_stream)
         self.fd = file_like
         self.bufsize = bufsize
@@ -126,7 +130,7 @@ class FileWriteStream(Stream):
 
 
 class S3GetStream(Stream):
-    def __init__(self, s3_client: boto3.client, bucket: str, key: str, bufsize=1024*1024):
+    def __init__(self, s3_client: S3ClientType, bucket: str, key: str, bufsize=1024*1024):
         self.obj = s3_client.get_object(Bucket=bucket, Key=key)
         self.bufsize = bufsize
 
@@ -135,7 +139,7 @@ class S3GetStream(Stream):
 
 
 class S3PutStream(Stream):
-    def __init__(self, prev_stream, s3_client: boto3.client, bucket: str, key: str, bufsize=1024*1024):
+    def __init__(self, prev_stream, s3_client: S3ClientType, bucket: str, key: str, bufsize=1024*1024):
         super().__init__(prev_stream)
         self.client = s3_client
         self.bucket = bucket
@@ -220,7 +224,7 @@ class GzipDecompressorStream(SimpleFilterStream):
         super().__init__(prev_stream, gzip.decompress)
 
 
-stream_map = {
+stream_map: dict[str, tuple[str, type[Stream], type[Stream]]] = {
     "pass": ("", Stream, Stream),
     "gzip": (".gz", GzipCompressorStream, GzipDecompressorStream),
     "bzip2": (".bz2", Bz2CompressorStream, Bz2DecompressorStream),
@@ -380,7 +384,7 @@ try:
 except ImportError:
     pass
 
-stream_ext = {v[0]: (k, *v[1:]) for k, v in stream_map.items()}
+stream_ext: dict[str, tuple[str, type[Stream], type[Stream]]] = {v[0]: (k, *v[1:]) for k, v in stream_map.items()}
 stream_compress_modes = list(stream_map.keys()) + ["decompress", "raw"]
 
 
