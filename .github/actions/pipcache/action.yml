@@ -8,7 +8,7 @@ runs:
         pip download -d _cache --cache-dir _cache -r requirements-ext.txt -r requirements.txt
         sudo chown -R root. _cache
         for pf in linux/{amd64,arm64}; do
-          docker run --platform $pf --rm -v $PWD:/w -w /w python:3-alpine sh -c "apk add --no-cache lzo-dev snappy-dev gcc g++ ; pip install --cache-dir _cache --find-links _cache -r requirements-ext.txt -r requirements.txt"
+          docker run --platform $pf --rm -v $PWD:/w -w /w python:3-alpine sh -c "apk add --no-cache lzo-dev snappy-dev gcc g++ ; pip wheel -w _cache --cache-dir _cache --find-links _cache -r requirements-ext.txt -r requirements.txt"
         done
         sudo chown -R $(id -u):$(id -g) _cache
     - name: show cache
