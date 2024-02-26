@@ -27,6 +27,7 @@ allow-fail = true
 name = "upload older files"
 older = "2d"
 newer = "7d"
+s3_secret_key = "mysecretkey"
 
 [filetree-delete]
 name = "delete oldest files"
@@ -56,6 +57,7 @@ older = "400d"
         "s3-put-tree": {
             "older": "2d",
             "newer": "7d",
+            "s3_secret_key": "mysecretkey",
         },
     }, {
         "name": "delete oldest files",
@@ -83,6 +85,7 @@ older = "400d"
             "newer": "7d",
             "compress": "xz",
             "top": "/var/log/container",
+            "s3_secret_key": "mysecretkey",
             "dotenv": True,
         },
     }, {
@@ -102,7 +105,7 @@ log2s3 filetree-compress --older 1d --newer 7d --bigger 10k --compress xz --top 
 log2s3 s3-make-bucket --dotenv || true
 
 # upload older files
-log2s3 s3-put-tree --dotenv --older 2d --newer 7d --compress xz --top /var/log/container
+log2s3 s3-put-tree --s3-secret-key mysecretkey --dotenv --older 2d --newer 7d --compress xz --top /var/log/container
 
 # delete oldest files
 log2s3 filetree-delete --older 400d --top /var/log/container
@@ -150,6 +153,7 @@ log2s3 filetree-delete --older 400d --top /var/log/container
             if res.exception:
                 raise res.exception
             self.assertIn("(dry)", "\n".join(alog.output))
+            self.assertNotIn("mysecretkey", "\n".join(alog.output))
 
     def test_playbook_wet(self):
         with tempfile.NamedTemporaryFile("r+") as tf:
@@ -165,6 +169,7 @@ log2s3 filetree-delete --older 400d --top /var/log/container
             if res.exception:
                 raise res.exception
             self.assertNotIn("(dry)", "\n".join(alog.output))
+            self.assertNotIn("mysecretkey", "\n".join(alog.output))
             og.assert_any_call("AWS_ACCESS_KEY_ID")
             og.assert_any_call("AWS_ENDPOINT_URL_S3")
             fc.assert_called_once()
@@ -175,7 +180,7 @@ log2s3 filetree-delete --older 400d --top /var/log/container
             spt.assert_called_once()
             self.assertEqual(
                 {"older": "2d", "newer": "7d", "top": "/var/log/container",
-                 "compress": "xz", "dotenv": True},
+                 "compress": "xz", "dotenv": True, "s3_secret_key": "mysecretkey"},
                 {k: v for k, v in spt.call_args.kwargs.items() if bool(v)})
             fd.assert_called_once()
             self.assertEqual(
