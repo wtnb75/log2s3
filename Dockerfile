@@ -2,7 +2,7 @@ FROM python:3-alpine AS build
 COPY ./ /app
 RUN cd /app && pip install build && python -m build -w
 RUN apk add --no-cache lzo-dev snappy-dev gcc g++
-RUN cd /app/dist && pip wheel -r ../requirements-ext.txt
+RUN cd /app/dist && pip wheel --cache-dir ../_cache --find-links ../_cache -r ../requirements-ext.txt -r ../requirements.txt
 
 FROM python:3-alpine
 ENV PYTHONDONTWRITEBYTECODE=1
