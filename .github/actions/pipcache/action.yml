@@ -13,3 +13,4 @@ runs:
         sudo chown -R $(id -u):$(id -g) _cache
     - name: show cache
       run: pip cache list --cache-dir _cache
+      shell: bash
