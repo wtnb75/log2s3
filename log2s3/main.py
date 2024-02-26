@@ -31,10 +31,14 @@ def arg_mask(d: Union[list, dict]) -> Union[list, dict]:
     if isinstance(d, dict):
         res = d.copy()
         for p in mask_prefix:
-            for k in filter(lambda f: f.startswith(p), res.keys()):
-                if isinstance(res[k], str):
-                    res[k] = "*"*len(res[k])
-                else:
+            for k, v in d.items():
+                if v is None:
+                    res.pop(k)
+                elif isinstance(v, str) and k.startswith(p):
+                    res[k] = "*"*len(v)
+                elif isinstance(v, (dict, list)):
+                    res[k] = arg_mask(v)
+                elif k.startswith(p):
                     res[k] = "****"
         return res
     return d
@@ -745,7 +749,7 @@ def do_ible1(name: str, fn: click.Command, args: dict, dry: bool):
 def convert_ible(data: Union[list[dict], dict]) -> list[dict]:
     if isinstance(data, dict):
         d = []
-        _log.debug("convert %s", data)
+        _log.debug("convert %s", arg_mask(data))
         for k, v in data.items():
             name = v.pop("name", k)
             allow_fail = v.pop("allow-fail", None)
