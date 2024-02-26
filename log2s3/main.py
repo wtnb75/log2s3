@@ -22,6 +22,28 @@ except ImportError:
 _log = getLogger(__name__)
 
 
+mask_prefix = ["s3_"]
+
+
+def arg_mask(d: Union[list, dict]) -> Union[list, dict]:
+    if isinstance(d, list):
+        return [arg_mask(x) for x in d]
+    if isinstance(d, dict):
+        res = d.copy()
+        for p in mask_prefix:
+            for k, v in d.items():
+                if v is None:
+                    res.pop(k)
+                elif isinstance(v, str) and k.startswith(p):
+                    res[k] = "*"*len(v)
+                elif isinstance(v, (dict, list)):
+                    res[k] = arg_mask(v)
+                elif k.startswith(p):
+                    res[k] = "****"
+        return res
+    return d
+
+
 @click.group(invoke_without_command=True)
 @click.version_option(VERSION)
 @click.pass_context
@@ -713,12 +735,12 @@ def traefik_json_convert(file, nth, format):
 
 
 def do_ible1(name: str, fn: click.Command, args: dict, dry: bool):
-    _log.debug("name=%s, fn=%s, args=%s, dry=%s", name, fn, args,  dry)
+    _log.debug("name=%s, fn=%s, args=%s, dry=%s", name, fn, arg_mask(args),  dry)
     _log.info("start %s", name)
     if dry:
-        _log.info("run(dry): %s %s", fn, args)
+        _log.info("run(dry): %s %s", fn, arg_mask(args))
     else:
-        _log.info("run(wet): %s %s", fn, args)
+        _log.info("run(wet): %s %s", fn, arg_mask(args))
         assert fn.callback is not None
         fn.callback(**args)
     _log.info("end %s", name)
@@ -727,7 +749,7 @@ def do_ible1(name: str, fn: click.Command, args: dict, dry: bool):
 def convert_ible(data: Union[list[dict], dict]) -> list[dict]:
     if isinstance(data, dict):
         d = []
-        _log.debug("convert %s", data)
+        _log.debug("convert %s", arg_mask(data))
         for k, v in data.items():
             name = v.pop("name", k)
             allow_fail = v.pop("allow-fail", None)
@@ -735,7 +757,7 @@ def convert_ible(data: Union[list[dict], dict]) -> list[dict]:
             if allow_fail is not None:
                 ent["allow-fail"] = allow_fail
             d.append(ent)
-        _log.debug("converted: %s", d)
+        _log.debug("converted: %s", arg_mask(d))
         data = d
     return data
 
@@ -762,12 +784,12 @@ def arg2arg(fn: click.Command, args: dict, baseparam: dict) -> dict:
 
 
 def ible_gen(data: list[dict]) -> Generator[tuple[str, click.Command, dict, dict], None, None]:
-    _log.debug("input: %s", data)
+    _log.debug("input: %s", arg_mask(data))
     if not isinstance(data, list):
         raise Exception(f"invalid list style: {type(data)}")
     baseparam = {}
     for v in data:
-        _log.debug("exec %s", v)
+        _log.debug("exec %s", arg_mask(v))
         if not isinstance(v, dict):
             raise Exception(f"invalid dict style: {type(v)}")
         kw: set[str] = v.keys()-{"name", "allow-fail"}
@@ -805,7 +827,6 @@ def gen_sh(file: str) -> Generator[tuple[Optional[str], list[str]], None, None]:
         name = None
         for line in fp:
             line = line.lstrip().rstrip("\n")
-            _log.debug("LINE: %s", line)
             if line.startswith("#"):
                 name = line.lstrip()[1:].strip()
                 _log.debug("name: %s", name)
@@ -844,7 +865,7 @@ def sh_line2arg(cmdop: click.Command, tokens: list[str]) -> tuple[dict, bool]:
                     args[opt.name] = True
                 else:
                     val = next(tks)
-                    _log.debug("args: %s=%s", opt, val)
+                    _log.debug("args: %s", arg_mask({opt.name: val}))
                     args[opt.name] = val
                 break
             elif token in opt.secondary_opts:
@@ -869,7 +890,7 @@ def read_sh(file: str) -> list[dict]:
             raise Exception(f"no such subcommand: {cmd}")
         cmdop = cli.commands[cmd]
         args, allow_fail = sh_line2arg(cmdop, tokens[2:])
-        _log.debug("result args: %s", args)
+        _log.debug("result args: %s", arg_mask(args))
         ent = {
             "name": name or cmd,
             cmd: args,
