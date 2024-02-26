@@ -10,17 +10,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@master
+    - uses: actions/cache@v4
+      with:
+        path: _cache
+        key: ${{ runner.os }}-pip-${{ github.sha }}
+        restore-keys: ${{ runner.os }}-pip-
     - name: prepare
       run: "sudo apt update && sudo apt install -y libsnappy-dev liblzo2-dev"
     - name: versioning
       run: "echo \"VERSION = '${GITHUB_REF##*/v}'\" > log2s3/version.py"
     - uses: wtnb75/actions/python@main
       with:
-        pipinstall: ".[ext]"
+        pipinstall: ".[ext] --cache-dir _cache"
     - uses: wtnb75/actions/flake8@main
     - uses: wtnb75/actions/pytest@main
     - id: wheel
       uses: wtnb75/actions/wheel@main
+    - uses: docker/setup-qemu-action@v3
+    - uses: ./.github/actions/pipcache
     - uses: wtnb75/actions/docker@main
       with:
         push: 'true'
