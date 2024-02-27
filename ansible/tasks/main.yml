@@ -1,2 +1,4 @@
-- include_tasks: docker.yml
-- include_tasks: rsyslog.yml
+- name: Docker logging setting
+  ansible.builtin.include_tasks: docker.yml
+- name: Rsyslog setup
+  ansible.builtin.include_tasks: rsyslog.yml

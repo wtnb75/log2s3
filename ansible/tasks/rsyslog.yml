@@ -1,37 +1,37 @@
-- name: max message size
-  lineinfile:
+- name: Config max message size
+  ansible.builtin.lineinfile:
     path: /etc/rsyslog.conf
     line: '$MaxMessageSize 64k'
     regexp: 'MaxMessageSize'
     insertbefore: BOF
-- name: imtcp
-  lineinfile:
+- name: Setup imtcp module
+  ansible.builtin.lineinfile:
     path: /etc/rsyslog.conf
     regexp: 'module.*imtcp'
     line: 'module(load="imtcp")'
-- name: imtcp port
-  lineinfile:
+- name: Setup imtcp port
+  ansible.builtin.lineinfile:
     path: /etc/rsyslog.conf
     regexp: 'input.*imtcp'
     line: 'input(type="imtcp" port="514")'
-- name: format
-  lineinfile:
+- name: Config format
+  ansible.builtin.lineinfile:
     path: /etc/rsyslog.conf
     regexp: 'ActionFileDefaultTemplate'
     line: '$ActionFileDefaultTemplate RSYSLOG_FileFormat'
-- name: config subdir
-  lineinfile:
+- name: Config subdir
+  ansible.builtin.lineinfile:
     path: /etc/rsyslog.conf
     line: '$IncludeConfig /etc/rsyslog.d/*.conf'
-- name: directory
-  file:
+- name: Make directory
+  ansible.builtin.file:
     path: /etc/rsyslog.d
     owner: root
     group: root
     mode: '0755'
     state: directory
-- name: container.conf
-  template:
+- name: Container logger configuration
+  ansible.builtin.template:
     src: rsyslog-container.conf
     dest: /etc/rsyslog.d/10-container.conf
     owner: root
