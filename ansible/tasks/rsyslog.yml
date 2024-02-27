@@ -1,3 +1,9 @@
+- name: max message size
+  lineinfile:
+    path: /etc/rsyslog.conf
+    line: '$MaxMessageSize 64k'
+    regexp: 'MaxMessageSize'
+    insertbefore: BOF
 - name: imtcp
   lineinfile:
     path: /etc/rsyslog.conf
