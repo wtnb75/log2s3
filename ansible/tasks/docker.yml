@@ -1,12 +1,12 @@
-- name: config directory
-  file:
+- name: Config directory
+  ansible.builtin.file:
     path: /etc/docker
     mode: '0755'
     owner: root
     group: root
     state: directory
-- name: config file
-  copy:
+- name: Config file
+  ansible.builtin.copy:
     dest: /etc/docker/daemon.json
     src: docker-daemon.json
     owner: root
