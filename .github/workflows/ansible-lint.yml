@@ -1,6 +1,9 @@
 name: ansible-lint
 on:
-  pull_request: {}
+  push:
+    branches-ignore: [main, gh-pages]
+    paths:
+      - ansible
 jobs:
   build:
     name: ansible lint
