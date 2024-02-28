@@ -22,12 +22,17 @@ jobs:
     - uses: wtnb75/actions/flake8@main
     - uses: wtnb75/actions/pytest@main
     - uses: wtnb75/actions/wheel@main
+    - id: pdoc
+      uses: wtnb75/actions/pdoc@main
+      with:
+        output-dir: docs
+        module: log2s3
     - uses: docker/setup-qemu-action@v3
     - uses: ./.github/actions/pipcache
     - uses: wtnb75/actions/merge-pages@main
       with:
-        dirs: cover
-        #pydist: dist
+        dirs: "cover docs"
+        pydist: dist
     - uses: wtnb75/actions/docker@main
       with:
         push: 'true'

@@ -26,6 +26,11 @@ jobs:
     - uses: wtnb75/actions/pytest@main
     - id: wheel
       uses: wtnb75/actions/wheel@main
+    - id: pdoc
+      uses: wtnb75/actions/pdoc@main
+      with:
+        output-dir: docs
+        module: log2s3
     - uses: docker/setup-qemu-action@v3
     - uses: ./.github/actions/pipcache
     - uses: wtnb75/actions/docker@main
