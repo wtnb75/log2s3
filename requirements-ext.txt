@@ -3,7 +3,7 @@ lz4
 Brotli
 pyliblzfse
 zopfli
-python-snappy
+python-snappy<0.7
 python-lzo
 pyzpaq
 zlib-ng
