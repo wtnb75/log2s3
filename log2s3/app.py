@@ -1,5 +1,6 @@
 import datetime
 import html
+import io
 from typing import Any
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, Response, Header, Query
@@ -140,92 +141,97 @@ def html1(file_path: str, month=Query(pattern='^[0-9]{4}', default="")):
     def gen(ldir: dict[str, dict[str, str]]):
         yield f"<html><title>{file_path}</title><body>"
         for title, files in ldir.items():
+            buf = io.StringIO()
             uri = uriescape(f"html1/{title}")
-            yield '<div style="border: 1px solid black; float: left; margin: 10px; padding: 1em;">'
-            yield f'<h2><a href="{uri}">{title}</a></h2><ul>'
+            buf.write('<div style="border: 1px solid black; float: left; margin: 10px; padding: 1em;">')
+            buf.write(f'<h2><a href="{uri}">{title}</a></h2><ul>')
             premonth = None
             for dtstr in sorted(files.keys()):
                 dt = datetime.datetime.strptime(dtstr, "%Y-%m-%d")
                 month = dt.strftime("%Y-%m")
                 if premonth != month:
                     if premonth is not None:
-                        yield "</li>"
-                    yield f"<li>{month}: "
+                        buf.write("</li>")
+                    buf.write(f"<li>{month}: ")
                     premonth = month
                 link = files[dtstr]
                 uri = uriescape(f"read/{link}")
                 linkhtml = f'<a href="{uri}">{dt.strftime("%d")}</a>'
                 color = api_config.get("weekday_colors", {}).get(dt.weekday())
                 if color is not None:
-                    yield f' <span style="background-color: {color};">{linkhtml}</span>'
+                    buf.write(f' <span style="background-color: {color};">{linkhtml}</span>')
                 else:
-                    yield f' {linkhtml}'
-            yield "</li></ul>"
-            yield '</div>'
+                    buf.write(f' {linkhtml}')
+            buf.write("</li></ul>")
+            buf.write('</div>')
+            yield buf.getvalue()
     ldir = list_dir(file_path, month)
     if len(ldir) == 0:
         raise HTTPException(status_code=404, detail=f"not found: {file_path}")
     return StreamingResponse(content=gen(ldir), media_type="text/html")
 
 
-def html2_gen1(uri: str, month: str, files: dict[str, str]):
+def html2_gen1(uri: str, month: str, files: dict[str, str]) -> str:
     dt = datetime.datetime.strptime(month, "%Y-%m").date()
-    yield f'<tr><th colspan="7"><a href="{uri}?month={month}">{month}</a></th></tr>'
+    buf = io.StringIO()
+    buf.write(f'<tr><th colspan="7"><a href="{uri}?month={month}">{month}</a></th></tr>')
     wday = (dt.weekday()+1) % 7
-    yield '<tr align="right">'
+    buf.write('<tr align="right">')
     if wday != 0:
-        yield f'<td colspan="{wday}"></td>'
+        buf.write(f'<td colspan="{wday}"></td>')
     for i in range(32):
         cdt = dt + datetime.timedelta(days=i)
         wday = (cdt.weekday()+1) % 7
         if cdt.month != dt.month:
             if wday != 0:
-                yield f'<td colspan="{7-wday}"></td>'
-            yield '</tr>'
+                buf.write(f'<td colspan="{7-wday}"></td>')
+            buf.write('</tr>')
             break
         if wday == 0:
-            yield '</tr><tr align="right">'
+            buf.write('</tr><tr align="right">')
         dtstr = cdt.strftime("%Y-%m-%d")
         if cdt == datetime.date.today():
             color = api_config.get("today_color")
         else:
             color = api_config.get("weekday_colors", {}).get(cdt.weekday())
         if color is None:
-            yield '<td>'
+            buf.write('<td>')
         else:
-            yield f'<td style="background-color: {color};">'
+            buf.write(f'<td style="background-color: {color};">')
         if dtstr in files:
             link = files[dtstr]
             uri = uriescape(f"read/{link}")
-            yield f'<a href="{uri}">{cdt.day}</a>'
+            buf.write(f'<a href="{uri}">{cdt.day}</a>')
         else:
-            yield f"{cdt.day}"
-        yield '</td>'
-    yield '</tr>'
+            buf.write(f"{cdt.day}")
+        buf.write('</td>')
+    buf.write('</tr>')
+    return buf.getvalue()
 
 
 def html2_gen(ldir: dict[str, dict[str, str]], file_path: str):
     yield f"<html><title>{file_path}</title><body>"
     for title, files in ldir.items():
         uri = uriescape(f"html2/{title}")
-        yield '<div style="float: left; margin: 1em;">'
-        yield f'<h2><a href="{uri}">{title}</a></h2>'
-        yield '<table border="1" style="border-collapse: collapse"><tr>'
+        buf = io.StringIO()
+        buf.write('<div style="float: left; margin: 1em;">')
+        buf.write(f'<h2><a href="{uri}">{title}</a></h2>')
+        buf.write('<table border="1" style="border-collapse: collapse"><tr>')
         b = datetime.date(2000, 1, 2)
         for i in range(7):
             wd = (b+datetime.timedelta(days=i))
             wdstr = wd.strftime("%a")
             color = api_config.get("weekday_colors", {}).get(wd.weekday())
             if color:
-                yield f'<th style="background-color: {color};"><code>{wdstr}</code></th>'
+                buf.write(f'<th style="background-color: {color};"><code>{wdstr}</code></th>')
             else:
-                yield f'<th><code>{wdstr}</code></th>'
-        yield '</tr>'
+                buf.write(f'<th><code>{wdstr}</code></th>')
+        buf.write('</tr>')
+        yield buf.getvalue()
         months = {x.rsplit("-", 1)[0] for x in files.keys()}
         for month in sorted(months):
-            yield from html2_gen1(uri, month, files)
-        yield "</table>"
-        yield '</div>'
+            yield html2_gen1(uri, month, files)
+        yield "</table></div>"
 
 
 @router.get("/html2/{file_path:path}")
