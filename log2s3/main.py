@@ -1007,7 +1007,8 @@ def bash(args):
 @click.option("--port", type=int, default=8000, show_default=True)
 @click.option("--root", default=".", show_default=True)
 @click.option("--prefix", default="")
-def serve(prefix, root, host, port):
+@click.option("--debug/--no-debug", default=False, show_default=True)
+def serve(prefix, root, host, port, debug):
     """start viewer"""
     from .app import update_config, router
     import uvicorn
@@ -1015,7 +1016,7 @@ def serve(prefix, root, host, port):
     update_config({"working_dir": root, })
     if prefix:
         update_config({"prefix": prefix, })
-    app = FastAPI()
+    app = FastAPI(debug=debug)
     app.include_router(router, prefix=prefix)
     uvicorn.run(app, host=host, port=port, log_config=None)
 
