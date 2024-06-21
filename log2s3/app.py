@@ -154,52 +154,58 @@ def html1(file_path: str, month=Query(pattern='^[0-9]{4}', default="")):
     return StreamingResponse(content=gen(ldir), media_type="text/html")
 
 
+def html2_gen1(uri: str, month: str, files: dict[str, str]):
+    dt = datetime.datetime.strptime(month, "%Y-%m").date()
+    yield f'<tr><th colspan="7"><a href="{uri}?month={month}">{month}</a></th></tr>'
+    wday = (dt.weekday()+1) % 7
+    yield '<tr align="right">'
+    if wday != 0:
+        yield f'<td colspan="{wday}"></td>'
+    for i in range(32):
+        cdt = dt + datetime.timedelta(days=i)
+        wday = (cdt.weekday()+1) % 7
+        if cdt.month != dt.month:
+            if wday != 0:
+                yield f'<td colspan="{7-wday}"></td>'
+            yield '</tr>'
+            break
+        if wday == 0:
+            yield '</tr><tr align="right">'
+        dtstr = cdt.strftime("%Y-%m-%d")
+        if cdt == datetime.date.today():
+            yield '<td style="background-color: yellow;">'
+        else:
+            yield '<td>'
+        if dtstr in files:
+            link = files[dtstr]
+            uri = uriescape(f"read/{link}")
+            yield f'<a href="{uri}">{cdt.day}</a>'
+        else:
+            yield f"{cdt.day}"
+        yield '</td>'
+    yield '</tr>'
+
+
+def html2_gen(ldir: dict[str, dict[str, str]], file_path: str):
+    yield f"<html><title>{file_path}</title><body>"
+    for title, files in ldir.items():
+        uri = uriescape(f"html2/{title}")
+        yield f'<h2><a href="{uri}">{title}</a></h2>'
+        yield '<table border="1" style="border-collapse: collapse"><tr>'
+        b = datetime.date(2000, 1, 2)
+        for i in range(7):
+            wd = (b+datetime.timedelta(days=i)).strftime("%a")
+            yield f'<th><code>{wd}</code></th>'
+        yield '</tr>'
+        months = {x.rsplit("-", 1)[0] for x in files.keys()}
+        for month in sorted(months):
+            yield from html2_gen1(uri, month, files)
+        yield "</table>"
+
+
 @router.get("/html2/{file_path:path}")
 def html2(file_path: str, month=Query(pattern='^[0-9]{4}', default="")):
-    def gen(ldir: dict[str, dict[str, str]]):
-        yield f"<html><title>{file_path}</title><body>"
-        for title, files in ldir.items():
-            uri = uriescape(f"html2/{title}")
-            yield f'<h2><a href="{uri}">{title}</a></h2>'
-            yield '<table border="1" style="border-collapse: collapse"><tr>'
-            b = datetime.date(2000, 1, 2)
-            for i in range(7):
-                wd = (b+datetime.timedelta(days=i)).strftime("%a")
-                yield f'<th><code>{wd}</code></th>'
-            yield '</tr>'
-            months = {x.rsplit("-", 1)[0] for x in files.keys()}
-            for month in sorted(months):
-                dt = datetime.datetime.strptime(month, "%Y-%m").date()
-                yield f'<tr><th colspan="7"><a href="{uri}?month={month}">{month}</a></th></tr>'
-                wday = (dt.weekday()+1) % 7
-                yield '<tr align="right">'
-                if wday != 0:
-                    yield f'<td colspan="{wday}"></td>'
-                for i in range(32):
-                    cdt = dt + datetime.timedelta(days=i)
-                    wday = (cdt.weekday()+1) % 7
-                    if cdt.month != dt.month:
-                        if wday != 0:
-                            yield f'<td colspan="{7-wday}"></td>'
-                        yield '</tr>'
-                        break
-                    if wday == 0:
-                        yield '</tr><tr align="right">'
-                    dtstr = cdt.strftime("%Y-%m-%d")
-                    if cdt == datetime.date.today():
-                        yield '<td style="background-color: yellow;">'
-                    else:
-                        yield '<td>'
-                    if dtstr in files:
-                        link = files[dtstr]
-                        uri = uriescape(f"read/{link}")
-                        yield f'<a href="{uri}">{cdt.day}</a>'
-                    else:
-                        yield f"{cdt.day}"
-                    yield '</td>'
-                yield '</tr>'
-            yield "</table>"
     ldir = list_dir(file_path, month)
     if len(ldir) == 0:
         raise HTTPException(status_code=404, detail=f"not found: {file_path}")
-    return StreamingResponse(content=gen(ldir), media_type="text/html")
+    return StreamingResponse(content=html2_gen(ldir, file_path), media_type="text/html")

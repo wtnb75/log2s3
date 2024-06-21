@@ -5,7 +5,6 @@ import gzip
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from httpx import head
 from log2s3.app import router, update_config
 
 
