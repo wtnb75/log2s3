@@ -19,6 +19,7 @@
 /etc/rsyslog.conf
 
 ```
+$MaxMessageSize 64k
 # ...
 module(load="imtcp")
 input(type="imtcp" port="514")

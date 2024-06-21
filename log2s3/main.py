@@ -1001,5 +1001,24 @@ def bash(args):
     subprocess.run(["bash", *args])
 
 
+@cli.command()
+@verbose_option
+@click.option("--host", default="0.0.0.0", show_default=True)
+@click.option("--port", type=int, default=8000, show_default=True)
+@click.option("--root", default=".", show_default=True)
+@click.option("--prefix", default="")
+def serve(prefix, root, host, port):
+    """start viewer"""
+    from .app import update_config, router
+    import uvicorn
+    from fastapi import FastAPI
+    update_config({"working_dir": root, })
+    if prefix:
+        update_config({"prefix": prefix, })
+    app = FastAPI()
+    app.include_router(router, prefix=prefix)
+    uvicorn.run(app, host=host, port=port, log_config=None)
+
+
 if __name__ == "__main__":
     cli()

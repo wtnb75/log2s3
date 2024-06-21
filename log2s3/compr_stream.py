@@ -2,7 +2,7 @@ import lzma
 import bz2
 import gzip
 import pathlib
-from typing import Optional, Generator
+from typing import Optional, Generator, Callable
 from logging import getLogger
 import io
 import os
@@ -15,10 +15,17 @@ _log = getLogger(__name__)
 
 
 class Stream:
+    """
+    stream base class
+
+    work as pass-through stream
+    """
+
     def __init__(self, prev_stream):
         self.prev = prev_stream
 
     def init_fp(self):
+        """prepare self as file-like interface"""
         _log.debug("use as fp(%s)", self.__class__.__name__)
         self.gen1 = self.prev.gen()
         self.buf = [next(self.gen1)]
@@ -55,6 +62,14 @@ class Stream:
             yield from buf
 
     def read(self, sz: int = -1) -> bytes:
+        """
+        read up to size bytes
+
+        used for file-like interface
+
+        args:
+            sz: read size. if size is not specified or -1, read all content.
+        """
         assert hasattr(self, "eof")
         if self.eof:
             return b""
@@ -90,6 +105,10 @@ class Stream:
 
 
 class FileReadStream(Stream):
+    """
+    Read from file, stream interface
+    """
+
     def __init__(self, file_like: io.RawIOBase | io.BufferedReader, bufsize=10*1024*1024):
         self.fd = file_like
         self.bufsize = bufsize
@@ -104,6 +123,10 @@ class FileReadStream(Stream):
 
 
 class RawReadStream(Stream):
+    """
+    Read from bytes, stream interface
+    """
+
     def __init__(self, data: bytes, bufsize=1024*1024):
         self.fd = io.BytesIO(data)
         self.bufsize = bufsize
@@ -118,6 +141,10 @@ class RawReadStream(Stream):
 
 
 class FileWriteStream(Stream):
+    """
+    Read data from prev_stream and write to file-like object.
+    """
+
     def __init__(self, prev_stream, file_like: io.RawIOBase | io.BufferedWriter, bufsize=1024*1024):
         super().__init__(prev_stream)
         self.fd = file_like
@@ -129,6 +156,10 @@ class FileWriteStream(Stream):
 
 
 class S3GetStream(Stream):
+    """
+    Read data from S3 object with chunked read.
+    """
+
     def __init__(self, s3_client: S3ClientType, bucket: str, key: str, bufsize=1024*1024):
         self.obj = s3_client.get_object(Bucket=bucket, Key=key)
         self.bufsize = bufsize
@@ -138,6 +169,10 @@ class S3GetStream(Stream):
 
 
 class S3PutStream(Stream):
+    """
+    Read data from prev_stream and write to S3 object.
+    """
+
     def __init__(self, prev_stream, s3_client: S3ClientType, bucket: str, key: str, bufsize=1024*1024):
         super().__init__(prev_stream)
         self.client = s3_client
@@ -154,7 +189,11 @@ class S3PutStream(Stream):
 
 
 class SimpleFilterStream(Stream):
-    def __init__(self, prev_stream, filter_fn):
+    """
+    simple compress/decompress function as stream interface, base class
+    """
+
+    def __init__(self, prev_stream, filter_fn: Callable[[bytes], bytes]):
         super().__init__(prev_stream)
         self.filter_fn = filter_fn
 
@@ -163,6 +202,10 @@ class SimpleFilterStream(Stream):
 
 
 class ComprFlushStream(Stream):
+    """
+    repeat compress, and finally flush()
+    """
+
     def __init__(self, prev_stream, compressor):
         super().__init__(prev_stream)
         self.compr = compressor
@@ -176,6 +219,10 @@ class ComprFlushStream(Stream):
 
 
 class DecompStream(Stream):
+    """
+    repeat decompress
+    """
+
     def __init__(self, prev_stream, decompressor):
         super().__init__(prev_stream)
         self.decompr = decompressor
@@ -186,16 +233,28 @@ class DecompStream(Stream):
 
 
 class XzCompressorStream(ComprFlushStream):
+    """
+    compressor stream for .xz format
+    """
+
     def __init__(self, prev_stream):
         super().__init__(prev_stream, lzma.LZMACompressor(format=lzma.FORMAT_XZ))
 
 
 class LzmaCompressorStream(ComprFlushStream):
+    """
+    compressor stream for .lzma format
+    """
+
     def __init__(self, prev_stream):
         super().__init__(prev_stream, lzma.LZMACompressor(format=lzma.FORMAT_ALONE))
 
 
 class XzDecompressorStream(DecompStream):
+    """
+    decompressor stream for .xz or .lzma format
+    """
+
     def __init__(self, prev_stream):
         super().__init__(prev_stream, lzma.LZMADecompressor(format=lzma.FORMAT_AUTO))
 
@@ -204,21 +263,37 @@ LzmaDecompressorStream = XzDecompressorStream
 
 
 class Bz2CompressorStream(ComprFlushStream):
+    """
+    compressor stream for .bz2 format
+    """
+
     def __init__(self, prev_stream):
         super().__init__(prev_stream, bz2.BZ2Compressor())
 
 
 class Bz2DecompressorStream(DecompStream):
+    """
+    decompressor stream for .bz2 format
+    """
+
     def __init__(self, prev_stream):
         super().__init__(prev_stream, bz2.BZ2Decompressor())
 
 
 class GzipCompressorStream(SimpleFilterStream):
+    """
+    compressor stream for .gz format
+    """
+
     def __init__(self, prev_stream):
         super().__init__(prev_stream, gzip.compress)
 
 
 class GzipDecompressorStream(SimpleFilterStream):
+    """
+    decompressor stream for .gz format
+    """
+
     def __init__(self, prev_stream):
         super().__init__(prev_stream, gzip.decompress)
 
