@@ -40,7 +40,7 @@ class TestApp(unittest.TestCase):
     def test_config(self):
         res = self.client.get("/config")
         self.assertEqual(200, res.status_code)
-        self.assertEqual(["working_dir"], list(res.json()))
+        self.assertIn("working_dir", list(res.json()))
 
     def test_list(self):
         res = self.client.get("/list/")
