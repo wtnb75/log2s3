@@ -10,7 +10,7 @@ import json
 import pathlib
 import boto3
 import io
-from typing import Union, Generator, Optional, Sequence
+from typing import Union, Generator, Optional
 from .version import VERSION
 from .common_stream import Stream, MergeStream
 from .compr_stream import S3GetStream, S3PutStream, \
