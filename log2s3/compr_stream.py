@@ -2,7 +2,8 @@ import lzma
 import bz2
 import gzip
 import pathlib
-from typing import Optional, Generator, Callable
+from .common_stream import Stream
+from typing import Optional, Callable
 from logging import getLogger
 import io
 import os
@@ -12,96 +13,6 @@ except ImportError:
     from typing import Any as S3ClientType
 
 _log = getLogger(__name__)
-
-
-class Stream:
-    """
-    stream base class
-
-    work as pass-through stream
-    """
-
-    def __init__(self, prev_stream):
-        self.prev = prev_stream
-
-    def init_fp(self):
-        """prepare self as file-like interface"""
-        _log.debug("use as fp(%s)", self.__class__.__name__)
-        self.gen1 = self.prev.gen()
-        self.buf = [next(self.gen1)]
-        self.eof = False
-
-    # work as pass-thru stream
-    def gen(self) -> Generator[bytes, None, None]:
-        """read part generator"""
-        yield from self.prev.gen()
-
-    def read_all(self) -> bytes:
-        """read all content"""
-        buf = io.BytesIO()
-        for i in self.gen():
-            _log.debug("read %d bytes", len(i))
-            buf.write(i)
-        _log.debug("finish read")
-        return buf.getvalue()
-
-    def text_gen(self) -> Generator[str, None, None]:
-        """readline generator"""
-        rest = b""
-        for i in self.gen():
-            d = i.rfind(b'\n')
-            if d != -1:
-                buf0 = io.BytesIO(rest + i[:d+1])
-                rest = i[d+1:]
-                buf = io.TextIOWrapper(buf0)
-                yield from buf
-            else:
-                rest = rest + i
-        if rest:
-            buf = io.TextIOWrapper(io.BytesIO(rest))
-            yield from buf
-
-    def read(self, sz: int = -1) -> bytes:
-        """
-        read up to size bytes
-
-        used for file-like interface
-
-        args:
-            sz: read size. if size is not specified or -1, read all content.
-        """
-        assert hasattr(self, "eof")
-        if self.eof:
-            return b""
-        if sz == -1:
-            _log.debug("read all")
-            try:
-                while True:
-                    self.buf.append(next(self.gen1))
-            except StopIteration:
-                _log.debug("read %s / %s", len(self.buf), sum([len(x) for x in self.buf]))
-            buf = self.buf
-            self.buf = []
-            self.eof = True
-            return b"".join(buf)
-        cur = sum([len(x) for x in self.buf])
-        try:
-            _log.debug("read part cur=%s / sz=%s", cur, sz)
-            while cur < sz:
-                bt = next(self.gen1)
-                _log.debug("read1 %d / cur=%s, sz=%s", len(bt), cur, sz)
-                self.buf.append(bt)
-                cur += len(bt)
-            buf = b"".join(self.buf)
-            self.buf = [buf[sz:]]
-            _log.debug("return %s, rest=%s", sz, len(self.buf[0]))
-            return buf[:sz]
-        except StopIteration:
-            _log.debug("eof %s / %s", len(self.buf), sum([len(x) for x in self.buf]))
-            buf = self.buf
-            self.buf = []
-            self.eof = True
-            return b"".join(buf)
 
 
 class FileReadStream(Stream):
