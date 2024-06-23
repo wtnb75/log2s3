@@ -60,7 +60,7 @@ def read_file(response: Response, file_path: str, accept_encoding: str = Header(
     target = uri2file(file_path)
     accepts = [x.strip() for x in accept_encoding.split(",")]
     media_type = api_config.get("content-type", "text/plain")
-    # gzip or brotli pattern
+    # gzip or brotli passthrough case
     special = {
         "br": (".br",),
         "gzip": (".gz",),
@@ -173,6 +173,7 @@ def html1(file_path: str, month=Query(pattern='^[0-9]{4}', default="")):
             buf.write("</li></ul>")
             buf.write('</div>')
             yield buf.getvalue()
+        yield "</body></html>"
     ldir = list_dir(file_path, month)
     if len(ldir) == 0:
         raise HTTPException(status_code=404, detail=f"not found: {file_path}")
@@ -218,10 +219,10 @@ def html2_gen1(uri: str, month: str, files: dict[str, str]) -> str:
 
 
 def html2_gen(ldir: dict[str, dict[str, str]], file_path: str):
-    yield f"<html><title>{file_path}</title><body>"
+    buf = io.StringIO()
+    buf.write(f"<html><title>{file_path}</title><body>")
     for title, files in ldir.items():
         uri = uriescape(f"html2/{title}")
-        buf = io.StringIO()
         buf.write('<div style="float: left; margin: 1em;">')
         buf.write(f'<h2><a href="{uri}">{title}</a></h2>')
         buf.write('<table border="1" style="border-collapse: collapse"><tr>')
@@ -235,11 +236,14 @@ def html2_gen(ldir: dict[str, dict[str, str]], file_path: str):
             else:
                 buf.write(f'<th><code>{wdstr}</code></th>')
         buf.write('</tr>')
-        yield buf.getvalue()
         months = {x.rsplit("-", 1)[0] for x in files.keys()}
         for month in sorted(months):
-            yield html2_gen1(uri, month, files)
-        yield "</table></div>"
+            buf.write(html2_gen1(uri, month, files))
+        buf.write("</table></div>")
+        yield buf.getvalue()
+        buf.truncate(0)
+        buf.seek(0)
+    yield "</body></html>"
 
 
 @router.get("/html2/{file_path:path}")

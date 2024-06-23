@@ -116,6 +116,7 @@ class MergeStream:
             if buf.tell() > self.bufsize:
                 yield buf.getvalue()
                 buf.truncate(0)
+                buf.seek(0)
         yield buf.getvalue()
 
     def text_gen(self) -> Generator[str, None, None]:

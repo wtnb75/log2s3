@@ -118,11 +118,9 @@ option/environment variables
 
 # examples
 
-docker-compose.yml
+compose.yml
 
 ```yaml
-version: '3'
-
 services:
   logcompress:
     image: ghcr.io/wtnb75/log2s3
@@ -196,3 +194,8 @@ log2s3 s3-put-tree --top /var/log/container --older 7d --newer 14d --compress xz
 # remove oldest
 log2s3 filetree-delete --top /var/log/container --older 400d
 ```
+
+## viewer UI
+
+- `log2s3 serve --root /var/log/container`
+    - open http://localhost:8000/html2/
