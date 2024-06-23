@@ -10,9 +10,10 @@ import json
 import pathlib
 import boto3
 import io
-from typing import Union, Generator, Optional, Sequence
+from typing import Union, Generator, Optional
 from .version import VERSION
-from .compr_stream import Stream, S3GetStream, S3PutStream, \
+from .common_stream import Stream, MergeStream
+from .compr_stream import S3GetStream, S3PutStream, \
     auto_compress_stream, stream_compress_modes
 try:
     from mypy_boto3_s3.client import S3Client as S3ClientType
@@ -384,22 +385,6 @@ def filetree_delete(top: pathlib.Path, config: dict):
     _log.info("removed=%d, skipped=%d", proc[0].processed, proc[0].skipped)
 
 
-def do_merge(input_stream: Sequence[Stream]):
-    txt_gens = [x.text_gen() for x in input_stream]
-    input_files = [[next(x), x] for x in txt_gens]
-    input_files.sort(key=lambda f: f[0])
-    while len(input_files) != 0:
-        click.echo(input_files[0][0], nl=False)
-        try:
-            input_files[0][0] = next(input_files[0][1])
-            if len(input_files) == 1 or input_files[0][0] < input_files[1][0]:
-                # already sorted
-                continue
-        except StopIteration:
-            input_files.pop(0)
-        input_files.sort(key=lambda f: f[0])
-
-
 @cli.command()
 @click.argument("files", type=click.Path(file_okay=True, dir_okay=True, exists=True, readable=True), nargs=-1)
 @verbose_option
@@ -419,7 +404,8 @@ def merge(files: list[click.Path]):
         else:
             _log.warning("%s is not a directory or file", p)
 
-    do_merge(input_stream)
+    for i in MergeStream(input_stream).text_gen():
+        click.echo(i, nl=False)
 
 
 @cli.command()
@@ -530,7 +516,8 @@ def s3_merge(s3: S3ClientType, bucket_name: str, keys: list[str]):
     for key in keys:
         input_stream.append(_s3_read_stream(s3, bucket_name, key))
 
-    do_merge(input_stream)
+    for i in MergeStream(input_stream).text_gen():
+        click.echo(i, nl=False)
 
 
 @cli.command()

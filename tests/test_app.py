@@ -134,3 +134,49 @@ class TestApp(unittest.TestCase):
     def test_read_html2_notfound(self):
         res = self.client.get("/html2/ba", params={"month": "2025-01"})
         self.assertEqual(404, res.status_code)
+
+    def test_cat_month(self):
+        res = self.client.get("/cat/ba", params={"month": "2024-01"})
+        self.assertEqual(200, res.status_code)
+        self.assertIn("text/plain", res.headers.get("content-type"))
+        self.assertIn(self.raw_content, res.text)
+
+    def test_cat_month_notfound(self):
+        res = self.client.get("/cat/ba", params={"month": "2025-01"})
+        self.assertEqual(404, res.status_code)
+
+    def test_merge_month(self):
+        res = self.client.get("/merge/ba", params={"month": "2024-01"})
+        self.assertEqual(200, res.status_code)
+        self.assertIn("text/plain", res.headers.get("content-type"))
+        self.assertIn(self.raw_content, res.text)
+
+    def test_merge_month_notfound(self):
+        res = self.client.get("/merge/ba", params={"month": "2025-01"})
+        self.assertEqual(404, res.status_code)
+
+    def test_read_link(self):
+        with tempfile.TemporaryDirectory() as td:
+            tdp = Path(td)
+            (Path(self.td.name) / "testlink").symlink_to(tdp)
+            (tdp / "2024-01-01.log").write_text("cannot read\n")
+            res = self.client.get("/read/testlink/2024-01-01.log")
+            self.assertEqual(403, res.status_code)
+
+    def test_list_link(self):
+        with tempfile.TemporaryDirectory() as td:
+            tdp = Path(td)
+            (Path(self.td.name) / "testlink").symlink_to(tdp)
+            (tdp / "2024-01-01.log").write_text("cannot read\n")
+            res = self.client.get("/list/")
+            self.assertEqual(200, res.status_code)
+            self.assertNotIn("testlink", res.json())
+
+    def test_list_link2(self):
+        with tempfile.TemporaryDirectory() as td:
+            tdp = Path(td)
+            (Path(self.td.name) / "testlink").symlink_to(tdp)
+            (tdp / "2024-01-01.log").write_text("cannot read\n")
+            res = self.client.get("/list/test")
+            self.assertEqual(200, res.status_code)
+            self.assertNotIn("testlink", res.json())

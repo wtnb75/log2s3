@@ -5,6 +5,7 @@ from typing import Any
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, Response, Header, Query
 from fastapi.responses import StreamingResponse
+from .common_stream import Stream, MergeStream, CatStream
 from .compr_stream import auto_compress_stream, stream_ext
 from logging import getLogger
 
@@ -101,10 +102,17 @@ def reg_file(res: dict, p: Path):
         return
     k2 = dt.strftime("%Y-%m-%d")
     k1 = file2uri(p.parent)
+    v1 = file2uri(val)
+    try:
+        # check k1 and v1 are in working_dir tree
+        uri2file(k1)
+        uri2file(v1)
+    except HTTPException:
+        return
     if k1 not in res:
         res[k1] = {}
     if k2 not in res[k1]:
-        res[k1][k2] = file2uri(val)
+        res[k1][k2] = v1
 
 
 def list_dir(file_path: str, file_prefix: str = "") -> dict[str, dict[str, str]]:
@@ -240,3 +248,75 @@ def html2(file_path: str, month=Query(pattern='^[0-9]{4}', default="")):
     if len(ldir) == 0:
         raise HTTPException(status_code=404, detail=f"not found: {file_path}")
     return StreamingResponse(content=html2_gen(ldir, file_path), media_type="text/html")
+
+
+def find_target(p: Path, accepts: list[str]) -> Path:
+    # gzip pass through
+    if "gzip" in accepts:
+        if p.with_suffix(p.suffix + ".gz").is_file():
+            return p.with_suffix(p.suffix + ".gz")
+    # raw pass through
+    if p.is_file():
+        return p
+    # others
+    if "br" in accepts:
+        if p.with_suffix(p.suffix + ".br").exists():
+            return p.with_suffix(p.suffix + ".br")
+    # compressed case
+    target_compressed = [x for x in p.parent.iterdir() if x.is_file() and x.name.startswith(p.name+".")]
+    if len(target_compressed):
+        return target_compressed[0]
+    raise HTTPException(status_code=404, detail=f"not found: {p}")
+
+
+def get_streams(files: dict[str, dict[str, str]], accepts: list[str]) -> tuple[list[Stream], dict]:
+    outputs: dict[str, list[str]] = {}
+    for _, v in files.items():
+        for k, fn in v.items():
+            if k not in outputs:
+                outputs[k] = []
+            outputs[k].append(fn)
+    output_list: list[Path] = []
+    for k in sorted(outputs.keys()):
+        for fname in sorted(outputs[k]):
+            target = uri2file(fname)
+            target_file = find_target(target, accepts)
+            output_list.append(target_file)
+    mode = "decompress"
+    hdrs = {}
+    if "gzip" in accepts:
+        mode = "gzip"
+        hdrs["content-encoding"] = "gzip"
+    elif "br" in accepts and ".br" in stream_ext:
+        mode = "brotli"
+        hdrs["content-encoding"] = "br"
+    _log.debug("streams: %s files, mode=%s, hdrs=%s",
+               len(output_list), mode, hdrs)
+    return [y[1] for y in [auto_compress_stream(x, mode) for x in output_list]], hdrs
+
+
+@router.get("/cat/{file_path:path}")
+def cat_file(file_path: str, accept_encoding: str = Header(""),
+             month=Query(pattern='^[0-9]{4}', default="")):
+    accepts = [x.strip() for x in accept_encoding.split(",")]
+    media_type = api_config.get("content-type", "text/plain")
+    ldir = list_dir(file_path, month)
+    if len(ldir) == 0:
+        raise HTTPException(status_code=404, detail=f"not found: {file_path}")
+    streams, hdrs = get_streams(ldir, accepts)
+    # daily sort
+    return StreamingResponse(
+        content=CatStream(streams).gen(), media_type=media_type, headers=hdrs)
+
+
+@router.get("/merge/{file_path:path}")
+def merge_file(file_path: str,
+               month=Query(pattern='^[0-9]{4}', default="")):
+    media_type = api_config.get("content-type", "text/plain")
+    ldir = list_dir(file_path, month)
+    if len(ldir) == 0:
+        raise HTTPException(status_code=404, detail=f"not found: {file_path}")
+    streams, hdrs = get_streams(ldir, [])  # cannot do passthrough compression
+    # daily sort
+    return StreamingResponse(
+        content=MergeStream(streams).gen(), media_type=media_type, headers=hdrs)
