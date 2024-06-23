@@ -300,14 +300,13 @@ def get_streams(files: dict[str, dict[str, str]], accepts: list[str]) -> tuple[l
 
 
 @router.get("/cat/{file_path:path}")
-def cat_file(file_path: str, accept_encoding: str = Header(""),
+def cat_file(file_path: str,
              month=Query(pattern='^[0-9]{4}', default="")):
-    accepts = [x.strip() for x in accept_encoding.split(",")]
     media_type = api_config.get("content-type", "text/plain")
     ldir = list_dir(file_path, month)
     if len(ldir) == 0:
         raise HTTPException(status_code=404, detail=f"not found: {file_path}")
-    streams, hdrs = get_streams(ldir, accepts)
+    streams, hdrs = get_streams(ldir, [])
     # daily sort
     return StreamingResponse(
         content=CatStream(streams).gen(), media_type=media_type, headers=hdrs)
