@@ -18,7 +18,7 @@ jobs:
       run: "sudo apt update && sudo apt install -y libsnappy-dev liblzo2-dev"
     - uses: wtnb75/actions/python@main
       with:
-        pipinstall: ".[ext] --cache-dir _cache"
+        pipinstall: ".[ext,test] --cache-dir _cache"
     - uses: wtnb75/actions/flake8@main
     - uses: wtnb75/actions/pytest@main
     - uses: wtnb75/actions/wheel@main
