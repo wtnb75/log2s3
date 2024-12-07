@@ -95,7 +95,7 @@ class S3PutStream(Stream):
 
     def gen(self):
         _log.debug("gen: bucket=%s, key=%s", self.bucket, self.key)
-        self.client.upload_fileobj(self, self.bucket, self.key)
+        self.client.upload_fileobj(self, self.bucket, self.key)   # type: ignore
         yield b""
 
 
@@ -296,7 +296,7 @@ except ImportError:
     pass
 
 try:
-    import snappy
+    import snappy   # type: ignore
 
     class SnappyCompressorStream(ComprFlushStream):
         def __init__(self, prev_stream):
@@ -312,7 +312,7 @@ except ImportError:
     pass
 
 try:
-    import lzo
+    import lzo   # type: ignore
 
     class LzoCompressorStream(SimpleFilterStream):
         def __init__(self, prev_stream):
@@ -327,7 +327,7 @@ except ImportError:
     pass
 
 try:
-    import zpaq
+    import zpaq   # type: ignore
 
     class ZpaqCompressorStream(SimpleFilterStream):
         def __init__(self, prev_stream):
@@ -355,7 +355,7 @@ except ImportError:
 
 
 try:
-    import zlib_ng.gzip_ng
+    import zlib_ng.gzip_ng   # type: ignore
 
     class ZlibNgCompressorStream(SimpleFilterStream):
         def __init__(self, prev_stream):

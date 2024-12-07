@@ -19,6 +19,7 @@ api_config: dict[str, Any] = {
     "today_color": "yellow",
 }
 exts = set(stream_ext.keys())
+month_query = Query(pattern='(^[0-9]{4}|^$)', default="")
 
 
 def update_config(conf: dict):
@@ -138,14 +139,19 @@ def list_dir(file_path: str, file_prefix: str = "") -> dict[str, dict[str, str]]
     return res
 
 
+@router.get("/dirs")
+def get_dirs(month=month_query) -> list[str]:
+    return list(list_dir(".", month).keys())
+
+
 @router.get("/list/{file_path:path}")
 def list_raw(file_path: str,
-             month=Query(pattern='^[0-9]{4}', default="")):
+             month=month_query):
     return list_dir(file_path, month)
 
 
 @router.get("/html1/{file_path:path}")
-def html1(file_path: str, month=Query(pattern='^[0-9]{4}', default="")):
+def html1(file_path: str, month=month_query):
     def gen(ldir: dict[str, dict[str, str]]):
         yield f"<html><title>{file_path}</title><body>"
         for title, files in ldir.items():
@@ -221,6 +227,8 @@ def html2_gen1(uri: str, month: str, files: dict[str, str]) -> str:
 def html2_gen(ldir: dict[str, dict[str, str]], file_path: str):
     buf = io.StringIO()
     buf.write(f"<html><title>{file_path}</title><body>")
+    thismonth = datetime.date.today().strftime("%Y-%m")
+    buf.write(f'<p><a href="?month={thismonth}">this month</a></p>')
     for title, files in ldir.items():
         uri = uriescape(f"html2/{title}")
         buf.write('<div style="float: left; margin: 1em;">')
@@ -247,7 +255,7 @@ def html2_gen(ldir: dict[str, dict[str, str]], file_path: str):
 
 
 @router.get("/html2/{file_path:path}")
-def html2(file_path: str, month=Query(pattern='^[0-9]{4}', default="")):
+def html2(file_path: str, month=month_query):
     ldir = list_dir(file_path, month)
     if len(ldir) == 0:
         raise HTTPException(status_code=404, detail=f"not found: {file_path}")
@@ -301,7 +309,7 @@ def get_streams(files: dict[str, dict[str, str]], accepts: list[str]) -> tuple[l
 
 @router.get("/cat/{file_path:path}")
 def cat_file(file_path: str,
-             month=Query(pattern='^[0-9]{4}', default="")):
+             month=month_query):
     media_type = api_config.get("content-type", "text/plain")
     ldir = list_dir(file_path, month)
     if len(ldir) == 0:
@@ -314,7 +322,7 @@ def cat_file(file_path: str,
 
 @router.get("/merge/{file_path:path}")
 def merge_file(file_path: str,
-               month=Query(pattern='^[0-9]{4}', default="")):
+               month=month_query):
     media_type = api_config.get("content-type", "text/plain")
     ldir = list_dir(file_path, month)
     if len(ldir) == 0:
