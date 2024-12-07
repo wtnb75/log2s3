@@ -4,3 +4,4 @@ python-dotenv
 pytimeparse
 humanfriendly
 fastapi
+uvicorn
