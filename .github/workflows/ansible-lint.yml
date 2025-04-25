@@ -4,6 +4,8 @@ on:
     branches-ignore: [main, gh-pages]
     paths:
       - ansible
+  workflow_dispatch:
+
 jobs:
   build:
     name: ansible lint
