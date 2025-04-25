@@ -23,12 +23,10 @@ month_query = Query(pattern='(^[0-9]{4}|^$)', default="")
 
 
 def update_config(conf: dict):
-    global api_config
     api_config.update(conf)
 
 
 def uri2file(file_path: str) -> Path:
-    global api_config
     working_dir = Path(api_config.get("working_dir", "."))
     target = (working_dir / file_path).resolve()
     if working_dir.resolve().absolute() not in target.resolve().absolute().parents:
@@ -39,25 +37,21 @@ def uri2file(file_path: str) -> Path:
 
 
 def file2uri(path: Path) -> str:
-    global api_config
     working_dir = Path(api_config.get("working_dir", "."))
     return str(path.relative_to(working_dir.resolve()))
 
 
 def uriescape(uri: str, quote: bool = True) -> str:
-    global api_config
     return html.escape(str(Path(api_config.get("prefix", "/")) / uri), quote)
 
 
 @router.get("/config")
 def read_config() -> dict:
-    global api_config
     return api_config
 
 
 @router.get("/read/{file_path:path}")
 def read_file(response: Response, file_path: str, accept_encoding: str = Header("")):
-    global api_config
     target = uri2file(file_path)
     accepts = [x.strip() for x in accept_encoding.split(",")]
     media_type = api_config.get("content-type", "text/plain")
