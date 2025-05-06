@@ -1,5 +1,5 @@
 click
-boto3
+boto3<1.36
 python-dotenv
 pytimeparse
 humanfriendly
