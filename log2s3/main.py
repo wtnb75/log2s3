@@ -10,6 +10,7 @@ import json
 import pathlib
 import boto3
 import io
+from click.core import UNSET
 from typing import Union, Generator, Optional
 from .version import VERSION
 from .common_stream import Stream, MergeStream
@@ -33,10 +34,10 @@ def arg_mask(d: Union[list, dict]) -> Union[list, dict]:
         res = d.copy()
         for p in mask_prefix:
             for k, v in d.items():
-                if v is None:
+                if v is None or v == UNSET:
                     res.pop(k)
                 elif isinstance(v, str) and k.startswith(p):
-                    res[k] = "*"*len(v)
+                    res[k] = "*" * len(v)
                 elif isinstance(v, (dict, list)):
                     res[k] = arg_mask(v)
                 elif k.startswith(p):
@@ -934,7 +935,7 @@ def sh_dump(data, output):
             click.echo(f"# {comment.rstrip()}", file=output)
         fnname: str = fn.name or name
         options: list[str] = [fnname]
-        for k, v in args.items():
+        for k, v in sorted(args.items()):
             opt = [x for x in fn.params if x.name == k][0]
             if opt.default == v:
                 continue

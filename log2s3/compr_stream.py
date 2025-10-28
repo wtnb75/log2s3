@@ -219,7 +219,10 @@ stream_map: dict[str, tuple[str, type[Stream], type[Stream]]] = {
 
 
 try:
-    import zstd
+    try:
+        from compression import zstd
+    except ImportError:
+        import zstd
 
     class ZstdCompressorStream(SimpleFilterStream):
         def __init__(self, prev_stream):
