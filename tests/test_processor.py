@@ -13,10 +13,10 @@ class TestProcessor(unittest.TestCase):
         for dir in [f"dir{x}" for x in range(5)]:
             (self.basedir / dir).mkdir()
             for day in range(10):
-                dt = datetime.now()-timedelta(days=day)
-                sz = (day+1) * 1024
-                logfile = (self.basedir / dir / dt.strftime("%Y-%m-%d.log"))
-                logfile.write_bytes(b'\0'*sz)
+                dt = datetime.now() - timedelta(days=day)
+                sz = (day + 1) * 1024
+                logfile = self.basedir / dir / dt.strftime("%Y-%m-%d.log")
+                logfile.write_bytes(b"\0" * sz)
                 os.utime(logfile, (dt.timestamp(), dt.timestamp()))
 
     def tearDown(self):
@@ -42,22 +42,24 @@ class TestProcessor(unittest.TestCase):
 
     def test_delete3(self):
         pre_cnts = self._count()
-        dt = datetime.now()-timedelta(days=2)
+        dt = datetime.now() - timedelta(days=2)
 
         dp = DelProcessor({"date": dt.strftime("%Y-%m-%d")})
         process_walk(self.basedir, [dp])
         cnts = self._count()
-        self.assertEqual(pre_cnts[0]-5, cnts[0])
+        self.assertEqual(pre_cnts[0] - 5, cnts[0])
 
     def test_delete4(self):
         pre_cnts = self._count()
-        dt = datetime.now()-timedelta(days=3)
-        dt2 = datetime.now()-timedelta(days=1)
+        dt = datetime.now() - timedelta(days=3)
+        dt2 = datetime.now() - timedelta(days=1)
 
-        dp = DelProcessor({"date": dt.strftime("%Y-%m-%d")+".."+dt2.strftime("%Y-%m-%d")})
+        dp = DelProcessor(
+            {"date": dt.strftime("%Y-%m-%d") + ".." + dt2.strftime("%Y-%m-%d")}
+        )
         process_walk(self.basedir, [dp])
         cnts = self._count()
-        self.assertEqual(pre_cnts[0]-10, cnts[0])
+        self.assertEqual(pre_cnts[0] - 10, cnts[0])
 
     def test_delete5(self):
         dp = DelProcessor({"older": "1d", "bigger": "4.1k", "dry": True})
@@ -74,7 +76,9 @@ class TestProcessor(unittest.TestCase):
 
     def test_compress1_dry(self):
         pre_cnts = self._count()
-        dp = CompressProcessor({"older": "2d", "bigger": "1k", "compress": "gzip", "dry": True})
+        dp = CompressProcessor(
+            {"older": "2d", "bigger": "1k", "compress": "gzip", "dry": True}
+        )
         process_walk(self.basedir, [dp])
         cnts = self._count()
         self.assertEqual(pre_cnts, cnts)

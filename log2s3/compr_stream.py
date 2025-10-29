@@ -7,6 +7,7 @@ from typing import Optional, Callable
 from logging import getLogger
 import io
 import os
+
 try:
     from mypy_boto3_s3.client import S3Client as S3ClientType
 except ImportError:
@@ -20,7 +21,9 @@ class FileReadStream(Stream):
     Read from file, stream interface
     """
 
-    def __init__(self, file_like: io.RawIOBase | io.BufferedReader, bufsize=10*1024*1024):
+    def __init__(
+        self, file_like: io.RawIOBase | io.BufferedReader, bufsize=10 * 1024 * 1024
+    ):
         self.fd = file_like
         self.bufsize = bufsize
 
@@ -38,7 +41,7 @@ class RawReadStream(Stream):
     Read from bytes, stream interface
     """
 
-    def __init__(self, data: bytes, bufsize=1024*1024):
+    def __init__(self, data: bytes, bufsize=1024 * 1024):
         self.fd = io.BytesIO(data)
         self.bufsize = bufsize
 
@@ -56,7 +59,12 @@ class FileWriteStream(Stream):
     Read data from prev_stream and write to file-like object.
     """
 
-    def __init__(self, prev_stream, file_like: io.RawIOBase | io.BufferedWriter, bufsize=1024*1024):
+    def __init__(
+        self,
+        prev_stream,
+        file_like: io.RawIOBase | io.BufferedWriter,
+        bufsize=1024 * 1024,
+    ):
         super().__init__(prev_stream)
         self.fd = file_like
         self.bufsize = bufsize
@@ -71,7 +79,9 @@ class S3GetStream(Stream):
     Read data from S3 object with chunked read.
     """
 
-    def __init__(self, s3_client: S3ClientType, bucket: str, key: str, bufsize=1024*1024):
+    def __init__(
+        self, s3_client: S3ClientType, bucket: str, key: str, bufsize=1024 * 1024
+    ):
         self.obj = s3_client.get_object(Bucket=bucket, Key=key)
         self.bufsize = bufsize
 
@@ -84,7 +94,14 @@ class S3PutStream(Stream):
     Read data from prev_stream and write to S3 object.
     """
 
-    def __init__(self, prev_stream, s3_client: S3ClientType, bucket: str, key: str, bufsize=1024*1024):
+    def __init__(
+        self,
+        prev_stream,
+        s3_client: S3ClientType,
+        bucket: str,
+        key: str,
+        bufsize=1024 * 1024,
+    ):
         super().__init__(prev_stream)
         self.client = s3_client
         self.bucket = bucket
@@ -95,7 +112,7 @@ class S3PutStream(Stream):
 
     def gen(self):
         _log.debug("gen: bucket=%s, key=%s", self.bucket, self.key)
-        self.client.upload_fileobj(self, self.bucket, self.key)   # type: ignore
+        self.client.upload_fileobj(self, self.bucket, self.key)  # type: ignore
         yield b""
 
 
@@ -299,7 +316,7 @@ except ImportError:
     pass
 
 try:
-    import snappy   # type: ignore
+    import snappy  # type: ignore
 
     class SnappyCompressorStream(ComprFlushStream):
         def __init__(self, prev_stream):
@@ -315,7 +332,7 @@ except ImportError:
     pass
 
 try:
-    import lzo   # type: ignore
+    import lzo  # type: ignore
 
     class LzoCompressorStream(SimpleFilterStream):
         def __init__(self, prev_stream):
@@ -330,7 +347,7 @@ except ImportError:
     pass
 
 try:
-    import zpaq   # type: ignore
+    import zpaq  # type: ignore
 
     class ZpaqCompressorStream(SimpleFilterStream):
         def __init__(self, prev_stream):
@@ -358,7 +375,7 @@ except ImportError:
 
 
 try:
-    import zlib_ng.gzip_ng   # type: ignore
+    import zlib_ng.gzip_ng  # type: ignore
 
     class ZlibNgCompressorStream(SimpleFilterStream):
         def __init__(self, prev_stream):
@@ -372,13 +389,17 @@ try:
 except ImportError:
     pass
 
-stream_ext: dict[str, tuple[str, type[Stream], type[Stream]]] = {v[0]: (k, *v[1:]) for k, v in stream_map.items()}
+stream_ext: dict[str, tuple[str, type[Stream], type[Stream]]] = {
+    v[0]: (k, *v[1:]) for k, v in stream_map.items()
+}
 stream_compress_modes = list(stream_map.keys()) + ["decompress", "raw"]
 
 
-def auto_compress_stream(ifname: pathlib.Path, mode: str, ifp: Optional[Stream] = None) -> tuple[os.PathLike, Stream]:
+def auto_compress_stream(
+    ifname: pathlib.Path, mode: str, ifp: Optional[Stream] = None
+) -> tuple[os.PathLike, Stream]:
     if ifp is None:
-        ifp = FileReadStream(ifname.open('br'))
+        ifp = FileReadStream(ifname.open("br"))
     if mode == "raw":
         return ifname, ifp
     base, ext = os.path.splitext(str(ifname))

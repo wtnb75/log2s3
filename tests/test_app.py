@@ -24,12 +24,12 @@ class TestApp(unittest.TestCase):
             dirp.mkdir(exist_ok=True)
             for i in range(10):
                 basename = (dtst + datetime.timedelta(days=i)).strftime("%Y-%m-%d")
-                fp = dirp / (basename+".log")
+                fp = dirp / (basename + ".log")
                 fp.write_text(self.raw_content)
             dtst = datetime.date(2024, 2, 1)
             for i in range(10, 20):
                 basename = (dtst + datetime.timedelta(days=i)).strftime("%Y-%m-%d")
-                fp = dirp / (basename+".log.gz")
+                fp = dirp / (basename + ".log.gz")
                 fp.write_bytes(self.gz_content)
 
     def tearDown(self):
@@ -60,21 +60,50 @@ class TestApp(unittest.TestCase):
     def test_list_year(self):
         res = self.client.get("/list/foo", params={"month": "2024-"})
         self.assertEqual(200, res.status_code)
-        self.assertEqual({
-            "2024-01-01", "2024-01-02", "2024-01-03", "2024-01-04", "2024-01-05",
-            "2024-01-06", "2024-01-07", "2024-01-08", "2024-01-09", "2024-01-10",
-            "2024-02-11", "2024-02-12", "2024-02-13", "2024-02-14", "2024-02-15",
-            "2024-02-16", "2024-02-17", "2024-02-18", "2024-02-19", "2024-02-20",
-        },
-            set(res.json()["foo"].keys()))
+        self.assertEqual(
+            {
+                "2024-01-01",
+                "2024-01-02",
+                "2024-01-03",
+                "2024-01-04",
+                "2024-01-05",
+                "2024-01-06",
+                "2024-01-07",
+                "2024-01-08",
+                "2024-01-09",
+                "2024-01-10",
+                "2024-02-11",
+                "2024-02-12",
+                "2024-02-13",
+                "2024-02-14",
+                "2024-02-15",
+                "2024-02-16",
+                "2024-02-17",
+                "2024-02-18",
+                "2024-02-19",
+                "2024-02-20",
+            },
+            set(res.json()["foo"].keys()),
+        )
 
     def test_list_month(self):
         res = self.client.get("/list/baz", params={"month": "2024-01"})
         self.assertEqual(200, res.status_code)
-        self.assertEqual({
-            "2024-01-01", "2024-01-02", "2024-01-03", "2024-01-04", "2024-01-05",
-            "2024-01-06", "2024-01-07", "2024-01-08", "2024-01-09", "2024-01-10"},
-            set(res.json()["baz"].keys()))
+        self.assertEqual(
+            {
+                "2024-01-01",
+                "2024-01-02",
+                "2024-01-03",
+                "2024-01-04",
+                "2024-01-05",
+                "2024-01-06",
+                "2024-01-07",
+                "2024-01-08",
+                "2024-01-09",
+                "2024-01-10",
+            },
+            set(res.json()["baz"].keys()),
+        )
 
     def test_read_raw(self):
         res = self.client.get("/read/baz/2024-01-01.log")
@@ -82,12 +111,16 @@ class TestApp(unittest.TestCase):
         self.assertEqual(self.raw_content, res.text)
 
     def test_read_decompress(self):
-        res = self.client.get("/read/baz/2024-02-11.log", headers={"accept-encoding": "raw"})
+        res = self.client.get(
+            "/read/baz/2024-02-11.log", headers={"accept-encoding": "raw"}
+        )
         self.assertEqual(200, res.status_code)
         self.assertEqual(self.raw_content, res.text)
 
     def test_read_compressed(self):
-        res = self.client.get("/read/baz/2024-02-11.log", headers={"accept-encoding": "gzip, br"})
+        res = self.client.get(
+            "/read/baz/2024-02-11.log", headers={"accept-encoding": "gzip, br"}
+        )
         self.assertEqual(200, res.status_code)
         self.assertEqual(self.gz_content, res.content)
 
@@ -96,7 +129,9 @@ class TestApp(unittest.TestCase):
         self.assertEqual(403, res.status_code)
 
     def test_read_notfound(self):
-        res = self.client.get("/read/baz/2099-02-11.log", headers={"accept-encoding": "gzip, br"})
+        res = self.client.get(
+            "/read/baz/2099-02-11.log", headers={"accept-encoding": "gzip, br"}
+        )
         self.assertEqual(404, res.status_code)
 
     def test_read_html1(self):
