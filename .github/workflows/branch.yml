@@ -20,7 +20,7 @@ jobs:
     - uses: wtnb75/actions/python@main
       with:
         pipinstall: ".[ext,test] --cache-dir _cache"
-    - uses: wtnb75/actions/flake8@main
+    - uses: wtnb75/actions/ruff@main
     - uses: wtnb75/actions/pytest@main
     - uses: wtnb75/actions/wheel@main
     - id: pdoc

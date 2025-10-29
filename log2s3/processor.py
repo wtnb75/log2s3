@@ -9,6 +9,7 @@ from .compr_stream import auto_compress_stream, FileWriteStream, S3PutStream
 import pytimeparse
 import humanfriendly
 import datetime
+
 try:
     from mypy_boto3_s3.client import S3Client as S3ClientType
 except ImportError:
@@ -27,17 +28,19 @@ class FileProcessor(ABC):
     def check_date_range(self, mtime: float) -> bool:
         if "older" in self.config:
             older = pytimeparse.parse(self.config["older"])
-            if older is not None and mtime > time.time()-older:
+            if older is not None and mtime > time.time() - older:
                 return False
         if "newer" in self.config:
             newer = pytimeparse.parse(self.config["newer"])
-            if newer is not None and mtime < time.time()-newer:
+            if newer is not None and mtime < time.time() - newer:
                 return False
         if "date" in self.config:
             mtime_datetime = datetime.datetime.fromtimestamp(mtime)
             if ".." in self.config["date"]:
-                fromdate, todate = [datetime.datetime.fromisoformat(
-                    x) for x in self.config["date"].split("..", 1)]
+                fromdate, todate = [
+                    datetime.datetime.fromisoformat(x)
+                    for x in self.config["date"].split("..", 1)
+                ]
                 if not fromdate <= mtime_datetime < todate:
                     return False
             else:
@@ -76,8 +79,11 @@ class FileProcessor(ABC):
     def check(self, fname: pathlib.Path, stat: Optional[os.stat_result]) -> bool:
         if stat is None:
             stat = fname.stat()
-        res = self.check_date_range(stat.st_mtime) and self.check_size_range(stat.st_size) and \
-            self.check_name(fname)
+        res = (
+            self.check_date_range(stat.st_mtime)
+            and self.check_size_range(stat.st_size)
+            and self.check_name(fname)
+        )
         if res:
             self.processed += 1
         else:
@@ -144,8 +150,14 @@ class CompressProcessor(FileProcessor):
             out_length = sum([len(x) for x in data.gen()])
             self.before_total += before_sz
             self.after_total += out_length
-            _log.info("(dry) compress fname=%s{%s->%s}, size=%s->%s", pfx, str(fname)[len(pfx):],
-                      str(newpath)[len(pfx):], before_sz, out_length)
+            _log.info(
+                "(dry) compress fname=%s{%s->%s}, size=%s->%s",
+                pfx,
+                str(fname)[len(pfx) :],
+                str(newpath)[len(pfx) :],
+                before_sz,
+                out_length,
+            )
         else:
             with newpath.open("wb") as ofp:
                 wrs = FileWriteStream(data, ofp)
@@ -154,8 +166,14 @@ class CompressProcessor(FileProcessor):
             out_length = newpath.stat().st_size
             self.before_total += before_sz
             self.after_total += out_length
-            _log.info("(wet) compress fname=%s{%s->%s}, size=%s->%s", pfx, str(fname)[len(pfx):],
-                      str(newpath)[len(pfx):], before_sz, out_length)
+            _log.info(
+                "(wet) compress fname=%s{%s->%s}, size=%s->%s",
+                pfx,
+                str(fname)[len(pfx) :],
+                str(newpath)[len(pfx) :],
+                before_sz,
+                out_length,
+            )
             shutil.copystat(fname, newpath, follow_symlinks=False)
             fname.unlink()
         return True
@@ -182,8 +200,8 @@ class S3Processor(FileProcessor):
             _log.debug("already exists: %s", obj_name)
             return True
         common_name = os.path.commonprefix([str(base_name), str(base_from)])
-        rest1 = str(base_from)[len(common_name):]
-        rest2 = str(base_name)[len(common_name):]
+        rest1 = str(base_from)[len(common_name) :]
+        rest2 = str(base_name)[len(common_name) :]
         reststr = ""
         if rest1 != rest2:
             reststr = "{%s,%s}" % (rest1, rest2)
@@ -194,9 +212,15 @@ class S3Processor(FileProcessor):
         if self.config.get("dry", False):
             out_length = sum([len(x) for x in data.gen()])
             self.uploaded += out_length
-            _log.info("(dry) upload {%s,%s}%s%s (%d->%d)",
-                      self.top, self.prefix, common_name, reststr,
-                      before_sz, out_length)
+            _log.info(
+                "(dry) upload {%s,%s}%s%s (%d->%d)",
+                self.top,
+                self.prefix,
+                common_name,
+                reststr,
+                before_sz,
+                out_length,
+            )
         else:
             outstr = S3PutStream(data, self.s3, bucket=self.bucket, key=obj_name)
             for _ in outstr.gen():
@@ -204,9 +228,15 @@ class S3Processor(FileProcessor):
             res = self.s3.head_object(Bucket=self.bucket, Key=obj_name)
             out_length = res.get("ContentLength", 0)
             self.uploaded += out_length
-            _log.info("(wet) upload {%s,%s}%s%s (%d->%d)",
-                      self.top, self.prefix, common_name, reststr,
-                      before_sz, out_length)
+            _log.info(
+                "(wet) upload {%s,%s}%s%s (%d->%d)",
+                self.top,
+                self.prefix,
+                common_name,
+                reststr,
+                before_sz,
+                out_length,
+            )
         return False
 
 

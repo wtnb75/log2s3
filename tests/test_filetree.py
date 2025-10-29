@@ -16,10 +16,10 @@ class TestProcessor(unittest.TestCase):
         for dir in [f"dir{x}" for x in range(5)]:
             (self.basedir / dir).mkdir()
             for day in range(10):
-                dt = datetime.now()-timedelta(days=day)
-                sz = (day+1) * 1024
-                logfile = (self.basedir / dir / dt.strftime("%Y-%m-%d.log"))
-                logfile.write_bytes(b'\0'*sz)
+                dt = datetime.now() - timedelta(days=day)
+                sz = (day + 1) * 1024
+                logfile = self.basedir / dir / dt.strftime("%Y-%m-%d.log")
+                logfile.write_bytes(b"\0" * sz)
                 os.utime(logfile, (dt.timestamp(), dt.timestamp()))
 
     def tearDown(self):
@@ -38,46 +38,85 @@ class TestProcessor(unittest.TestCase):
         if res.exception:
             raise res.exception
         self.assertEqual(0, res.exit_code)
-        self.assertEqual(50+3, len(res.output.split("\n")))
+        self.assertEqual(50 + 3, len(res.output.split("\n")))
 
     def test_list2(self):
-        res = CliRunner().invoke(cli, ["filetree-list", "--top", self.td.name, "--date",
-                                       (datetime.now()-timedelta(days=2)).strftime("%Y-%m-%d")])
+        res = CliRunner().invoke(
+            cli,
+            [
+                "filetree-list",
+                "--top",
+                self.td.name,
+                "--date",
+                (datetime.now() - timedelta(days=2)).strftime("%Y-%m-%d"),
+            ],
+        )
         if res.exception:
             raise res.exception
         self.assertEqual(0, res.exit_code)
-        self.assertEqual(5+3, len(res.output.split("\n")))
+        self.assertEqual(5 + 3, len(res.output.split("\n")))
 
     def test_compress(self):
-        res = CliRunner().invoke(cli, ["filetree-compress", "--top", self.td.name, "--date",
-                                       (datetime.now()-timedelta(days=2)).strftime("%Y-%m-%d")])
+        res = CliRunner().invoke(
+            cli,
+            [
+                "filetree-compress",
+                "--top",
+                self.td.name,
+                "--date",
+                (datetime.now() - timedelta(days=2)).strftime("%Y-%m-%d"),
+            ],
+        )
         if res.exception:
             raise res.exception
         self.assertEqual(0, res.exit_code)
         self.assertEqual(5, len(glob.glob(os.path.join(self.td.name, "*", "*.gz"))))
 
     def test_delete(self):
-        res = CliRunner().invoke(cli, ["filetree-delete", "--top", self.td.name, "--date",
-                                       (datetime.now()-timedelta(days=2)).strftime("%Y-%m-%d")])
+        res = CliRunner().invoke(
+            cli,
+            [
+                "filetree-delete",
+                "--top",
+                self.td.name,
+                "--date",
+                (datetime.now() - timedelta(days=2)).strftime("%Y-%m-%d"),
+            ],
+        )
         if res.exception:
             raise res.exception
         self.assertEqual(0, res.exit_code)
-        self.assertEqual(50-5, len(glob.glob(os.path.join(self.td.name, "*", "*.log"))))
+        self.assertEqual(
+            50 - 5, len(glob.glob(os.path.join(self.td.name, "*", "*.log")))
+        )
 
     def test_compbench(self):
-        dt = datetime.now()-timedelta(days=2)
-        res = CliRunner().invoke(cli, [
-            "compress-benchmark", os.path.join(self.td.name, "dir0", dt.strftime("%Y-%m-%d.log"))])
+        dt = datetime.now() - timedelta(days=2)
+        res = CliRunner().invoke(
+            cli,
+            [
+                "compress-benchmark",
+                os.path.join(self.td.name, "dir0", dt.strftime("%Y-%m-%d.log")),
+            ],
+        )
         if res.exception:
             raise res.exception
         self.assertEqual(0, res.exit_code)
         self.assertIn("gzip", res.output)
 
     def test_compbench2(self):
-        dt = datetime.now()-timedelta(days=2)
-        res = CliRunner().invoke(cli, [
-            "compress-benchmark", "--compress", "gzip", "--compress", "bzip2",
-            os.path.join(self.td.name, "dir0", dt.strftime("%Y-%m-%d.log"))])
+        dt = datetime.now() - timedelta(days=2)
+        res = CliRunner().invoke(
+            cli,
+            [
+                "compress-benchmark",
+                "--compress",
+                "gzip",
+                "--compress",
+                "bzip2",
+                os.path.join(self.td.name, "dir0", dt.strftime("%Y-%m-%d.log")),
+            ],
+        )
         if res.exception:
             raise res.exception
         self.assertEqual(0, res.exit_code)
@@ -93,12 +132,14 @@ class TestMerge(unittest.TestCase):
         for dir in [f"dir{x}" for x in range(5)]:
             (self.basedir / dir).mkdir()
             for day in range(10):
-                dt = datetime.now()-timedelta(days=day)
+                dt = datetime.now() - timedelta(days=day)
                 logf = io.StringIO()
                 for i in range(1000):
-                    ts = dt + timedelta(seconds=59*i)
-                    logf.write(ts.strftime("%Y-%m-%d %H:%M:%S") + " " + dir + " hello world\n")
-                logfile = (self.basedir / dir / dt.strftime("%Y-%m-%d.log"))
+                    ts = dt + timedelta(seconds=59 * i)
+                    logf.write(
+                        ts.strftime("%Y-%m-%d %H:%M:%S") + " " + dir + " hello world\n"
+                    )
+                logfile = self.basedir / dir / dt.strftime("%Y-%m-%d.log")
                 logfile.write_bytes(logf.getvalue().encode("utf-8"))
 
     def tearDown(self):

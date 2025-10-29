@@ -135,8 +135,7 @@ log2s3 filetree-delete --older 400d --top /var/log/container
             self.assertEqual(self.jsonlist, data)
 
     def test_convert_toml2sh(self):
-        with tempfile.NamedTemporaryFile("r+") as tf, \
-                patch("os.getenv") as og:
+        with tempfile.NamedTemporaryFile("r+") as tf, patch("os.getenv") as og:
             og.return_value = None
             tf.write(self.toml)
             tf.flush()
@@ -196,7 +195,11 @@ log2s3 filetree-delete --older 400d --top /var/log/container
                     "top": "/var/log/container",
                     "compress": "xz",
                 },
-                {k: v for k, v in fc.call_args.kwargs.items() if bool(v) and v is not UNSET},
+                {
+                    k: v
+                    for k, v in fc.call_args.kwargs.items()
+                    if bool(v) and v is not UNSET
+                },
             )
             spt.assert_called_once()
             self.assertEqual(
@@ -208,10 +211,18 @@ log2s3 filetree-delete --older 400d --top /var/log/container
                     "dotenv": True,
                     "s3_secret_key": "mysecretkey",
                 },
-                {k: v for k, v in spt.call_args.kwargs.items() if bool(v) and v is not UNSET},
+                {
+                    k: v
+                    for k, v in spt.call_args.kwargs.items()
+                    if bool(v) and v is not UNSET
+                },
             )
             fd.assert_called_once()
             self.assertEqual(
                 {"older": "400d", "top": "/var/log/container"},
-                {k: v for k, v in fd.call_args.kwargs.items() if bool(v) and v is not UNSET},
+                {
+                    k: v
+                    for k, v in fd.call_args.kwargs.items()
+                    if bool(v) and v is not UNSET
+                },
             )

@@ -4,13 +4,18 @@ import tempfile
 import lzma
 import gzip
 import pathlib
-from log2s3.compr_stream import FileReadStream, FileWriteStream, \
-    RawReadStream, stream_map, auto_compress_stream, \
-    S3PutStream
+from log2s3.compr_stream import (
+    FileReadStream,
+    FileWriteStream,
+    RawReadStream,
+    stream_map,
+    auto_compress_stream,
+    S3PutStream,
+)
 
 
 class TestInOut(unittest.TestCase):
-    input_data = b"hello world\n"*1000 + b"rest"
+    input_data = b"hello world\n" * 1000 + b"rest"
     text_output = input_data.decode("utf-8").splitlines(keepends=True)
 
     def setUp(self):
@@ -101,7 +106,7 @@ class TestAutoStream(unittest.TestCase):
             tf.seek(0)
             name, cst = auto_compress_stream(pathlib.Path(tf.name), "xz")
             self.assertEqual(xzdata, cst.read_all())
-            self.assertEqual(tf.name+".xz", str(name))
+            self.assertEqual(tf.name + ".xz", str(name))
 
     def test_xz2gzip(self):
         data = b"hello world\n" * 1000
@@ -153,12 +158,13 @@ class TestS3Put(unittest.TestCase):
     def test_s3put(self):
         import boto3
         from botocore.stub import Stubber
+
         rd = FileReadStream(self.tf, bufsize=1000)
         s3if = boto3.client("s3")
         with Stubber(s3if) as stubber:
             stubber.add_response(
-                "put_object", {},
-                {"Body": ANY, "Bucket": "bucket123", "Key": "key123"})
+                "put_object", {}, {"Body": ANY, "Bucket": "bucket123", "Key": "key123"}
+            )
             ps = S3PutStream(rd, s3if, bucket="bucket123", key="key123", bufsize=1024)
             for _ in ps.gen():
                 pass

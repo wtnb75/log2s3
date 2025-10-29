@@ -40,10 +40,10 @@ class Stream:
         """readline generator"""
         rest = b""
         for i in self.gen():
-            d = i.rfind(b'\n')
+            d = i.rfind(b"\n")
             if d != -1:
-                buf0 = io.BytesIO(rest + i[:d+1])
-                rest = i[d+1:]
+                buf0 = io.BytesIO(rest + i[: d + 1])
+                rest = i[d + 1 :]
                 buf = io.TextIOWrapper(buf0)
                 yield from buf
             else:
@@ -70,7 +70,9 @@ class Stream:
                 while True:
                     self.buf.append(next(self.gen1))
             except StopIteration:
-                _log.debug("read %s / %s", len(self.buf), sum([len(x) for x in self.buf]))
+                _log.debug(
+                    "read %s / %s", len(self.buf), sum([len(x) for x in self.buf])
+                )
             buf = self.buf
             self.buf = []
             self.eof = True
