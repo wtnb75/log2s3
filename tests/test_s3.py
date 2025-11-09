@@ -23,9 +23,7 @@ class TestS3(unittest.TestCase):
 
     def test_s3_make_buckets(self):
         with patch("boto3.client") as cl:
-            res = CliRunner().invoke(
-                cli, ["s3-make-bucket", "--s3-bucket", "mytestbucket123"], env=self.envs
-            )
+            res = CliRunner().invoke(cli, ["s3-make-bucket", "--s3-bucket", "mytestbucket123"], env=self.envs)
             if res.exception:
                 raise res.exception
             self.assertEqual(0, res.exit_code)
@@ -36,9 +34,7 @@ class TestS3(unittest.TestCase):
                 region_name="region123",
                 endpoint_url="https://example.com/",
             )
-            cl.return_value.create_bucket.assert_called_once_with(
-                Bucket="mytestbucket123"
-            )
+            cl.return_value.create_bucket.assert_called_once_with(Bucket="mytestbucket123")
 
     def test_s3_list_buckets(self):
         with patch("boto3.client") as cl:
@@ -64,14 +60,10 @@ class TestS3(unittest.TestCase):
                 },
                 {
                     "IsTruncated": False,
-                    "Contents": [
-                        {"LastModified": now, "Size": 12345, "Key": "key12345"}
-                    ],
+                    "Contents": [{"LastModified": now, "Size": 12345, "Key": "key12345"}],
                 },
             ]
-            res = CliRunner().invoke(
-                cli, ["s3-list", "--s3-bucket", "bucket123"], env=self.envs
-            )
+            res = CliRunner().invoke(cli, ["s3-list", "--s3-bucket", "bucket123"], env=self.envs)
             if res.exception:
                 raise res.exception
             self.assertEqual(0, res.exit_code)
@@ -103,9 +95,7 @@ class TestS3(unittest.TestCase):
                     ],
                 },
             ]
-            res = CliRunner().invoke(
-                cli, ["s3-du", "--s3-bucket", "bucket123"], env=self.envs
-            )
+            res = CliRunner().invoke(cli, ["s3-du", "--s3-bucket", "bucket123"], env=self.envs)
             if res.exception:
                 raise res.exception
             self.assertEqual(0, res.exit_code)
@@ -126,9 +116,7 @@ class TestS3(unittest.TestCase):
                 "IsTruncated": False,
                 "Contents": [],
             }
-            res = CliRunner().invoke(
-                cli, ["s3-du", "--s3-bucket", "bucket123"], env=self.envs
-            )
+            res = CliRunner().invoke(cli, ["s3-du", "--s3-bucket", "bucket123"], env=self.envs)
             if res.exception:
                 raise res.exception
             self.assertEqual(0, res.exit_code)
@@ -159,9 +147,7 @@ class TestS3(unittest.TestCase):
                     ],
                 },
             ]
-            res = CliRunner().invoke(
-                cli, ["s3-du", "--s3-bucket", "bucket123", "-S"], env=self.envs
-            )
+            res = CliRunner().invoke(cli, ["s3-du", "--s3-bucket", "bucket123", "-S"], env=self.envs)
             if res.exception:
                 raise res.exception
             self.assertEqual(0, res.exit_code)
@@ -182,17 +168,12 @@ class TestS3(unittest.TestCase):
             from datetime import datetime, timedelta
 
             now = datetime.now()
-            c = [
-                {"LastModified": now - timedelta(x), "Size": x * 1000, "Key": f"obj{x}"}
-                for x in range(10)
-            ]
+            c = [{"LastModified": now - timedelta(x), "Size": x * 1000, "Key": f"obj{x}"} for x in range(10)]
             cl.return_value.list_objects.return_value = {
                 "IsTruncated": False,
                 "Contents": c,
             }
-            res = CliRunner().invoke(
-                cli, ["s3-delete-by", "--s3-bucket", "bucket123"], env=self.envs
-            )
+            res = CliRunner().invoke(cli, ["s3-delete-by", "--s3-bucket", "bucket123"], env=self.envs)
             if res.exception:
                 raise res.exception
             self.assertEqual(0, res.exit_code)
@@ -206,10 +187,7 @@ class TestS3(unittest.TestCase):
             from datetime import datetime, timedelta
 
             now = datetime.now()
-            c = [
-                {"LastModified": now - timedelta(x), "Size": x * 1000, "Key": f"obj{x}"}
-                for x in range(10)
-            ]
+            c = [{"LastModified": now - timedelta(x), "Size": x * 1000, "Key": f"obj{x}"} for x in range(10)]
             cl.return_value.list_objects.return_value = {
                 "IsTruncated": False,
                 "Contents": c,
@@ -232,10 +210,7 @@ class TestS3(unittest.TestCase):
             from datetime import datetime, timedelta
 
             now = datetime.now()
-            c = [
-                {"LastModified": now - timedelta(x), "Size": x * 1000, "Key": f"obj{x}"}
-                for x in range(10)
-            ]
+            c = [{"LastModified": now - timedelta(x), "Size": x * 1000, "Key": f"obj{x}"} for x in range(10)]
             cl.return_value.list_objects.return_value = {
                 "IsTruncated": False,
                 "Contents": c,
@@ -256,10 +231,7 @@ class TestS3(unittest.TestCase):
             from datetime import datetime, timedelta
 
             now = datetime.now()
-            c = [
-                {"LastModified": now - timedelta(x), "Size": x * 1000, "Key": f"obj{x}"}
-                for x in range(10)
-            ]
+            c = [{"LastModified": now - timedelta(x), "Size": x * 1000, "Key": f"obj{x}"} for x in range(10)]
             cl.return_value.list_objects.return_value = {
                 "IsTruncated": False,
                 "Contents": c,
@@ -282,10 +254,7 @@ class TestS3(unittest.TestCase):
             from datetime import datetime, timedelta
 
             now = datetime.now()
-            c = [
-                {"LastModified": now - timedelta(x), "Size": x * 1000, "Key": f"obj{x}"}
-                for x in range(10)
-            ]
+            c = [{"LastModified": now - timedelta(x), "Size": x * 1000, "Key": f"obj{x}"} for x in range(10)]
             cl.return_value.list_objects.return_value = {
                 "IsTruncated": False,
                 "Contents": c,
@@ -316,10 +285,7 @@ class TestS3(unittest.TestCase):
             from datetime import datetime, timedelta
 
             now = datetime.now()
-            c = [
-                {"LastModified": now - timedelta(x), "Size": x * 1000, "Key": f"obj{x}"}
-                for x in range(10)
-            ]
+            c = [{"LastModified": now - timedelta(x), "Size": x * 1000, "Key": f"obj{x}"} for x in range(10)]
             cl.return_value.list_objects.return_value = {
                 "IsTruncated": False,
                 "Contents": c,
@@ -342,10 +308,7 @@ class TestS3(unittest.TestCase):
             from datetime import datetime, timedelta
 
             now = datetime.now()
-            c = [
-                {"LastModified": now - timedelta(x), "Size": x * 1000, "Key": f"obj{x}"}
-                for x in range(10)
-            ]
+            c = [{"LastModified": now - timedelta(x), "Size": x * 1000, "Key": f"obj{x}"} for x in range(10)]
             cl.return_value.list_objects.return_value = {
                 "IsTruncated": False,
                 "Contents": c,
@@ -368,10 +331,7 @@ class TestS3(unittest.TestCase):
             from datetime import datetime, timedelta
 
             now = datetime.now()
-            c = [
-                {"LastModified": now - timedelta(x), "Size": x * 1000, "Key": f"obj{x}"}
-                for x in range(11)
-            ]
+            c = [{"LastModified": now - timedelta(x), "Size": x * 1000, "Key": f"obj{x}"} for x in range(11)]
             cl.return_value.list_objects.return_value = {
                 "IsTruncated": False,
                 "Contents": c,
@@ -394,10 +354,7 @@ class TestS3(unittest.TestCase):
             from datetime import datetime, timedelta
 
             now = datetime.now()
-            c = [
-                {"LastModified": now - timedelta(x), "Size": x * 1000, "Key": f"obj{x}"}
-                for x in range(11)
-            ]
+            c = [{"LastModified": now - timedelta(x), "Size": x * 1000, "Key": f"obj{x}"} for x in range(11)]
             cl.return_value.list_objects.return_value = {
                 "IsTruncated": False,
                 "Contents": c,
@@ -479,9 +436,7 @@ class TestS3(unittest.TestCase):
             if res.exception:
                 raise res.exception
             self.assertEqual(0, res.exit_code)
-            cl.return_value.put_object.assert_called_once_with(
-                Bucket="bucket123", Key="path/to/hello.bz2", Body=ANY
-            )
+            cl.return_value.put_object.assert_called_once_with(Bucket="bucket123", Key="path/to/hello.bz2", Body=ANY)
             body = bz2.decompress(cl.return_value.put_object.call_args.kwargs["Body"])
             self.assertEqual(moddata, body.decode("utf-8"))
 

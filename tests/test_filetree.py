@@ -86,9 +86,7 @@ class TestProcessor(unittest.TestCase):
         if res.exception:
             raise res.exception
         self.assertEqual(0, res.exit_code)
-        self.assertEqual(
-            50 - 5, len(glob.glob(os.path.join(self.td.name, "*", "*.log")))
-        )
+        self.assertEqual(50 - 5, len(glob.glob(os.path.join(self.td.name, "*", "*.log"))))
 
     def test_compbench(self):
         dt = datetime.now() - timedelta(days=2)
@@ -136,9 +134,7 @@ class TestMerge(unittest.TestCase):
                 logf = io.StringIO()
                 for i in range(1000):
                     ts = dt + timedelta(seconds=59 * i)
-                    logf.write(
-                        ts.strftime("%Y-%m-%d %H:%M:%S") + " " + dir + " hello world\n"
-                    )
+                    logf.write(ts.strftime("%Y-%m-%d %H:%M:%S") + " " + dir + " hello world\n")
                 logfile = self.basedir / dir / dt.strftime("%Y-%m-%d.log")
                 logfile.write_bytes(logf.getvalue().encode("utf-8"))
 

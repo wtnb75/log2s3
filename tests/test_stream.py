@@ -162,9 +162,7 @@ class TestS3Put(unittest.TestCase):
         rd = FileReadStream(self.tf, bufsize=1000)
         s3if = boto3.client("s3")
         with Stubber(s3if) as stubber:
-            stubber.add_response(
-                "put_object", {}, {"Body": ANY, "Bucket": "bucket123", "Key": "key123"}
-            )
+            stubber.add_response("put_object", {}, {"Body": ANY, "Bucket": "bucket123", "Key": "key123"})
             ps = S3PutStream(rd, s3if, bucket="bucket123", key="key123", bufsize=1024)
             for _ in ps.gen():
                 pass

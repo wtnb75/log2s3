@@ -70,9 +70,7 @@ class Stream:
                 while True:
                     self.buf.append(next(self.gen1))
             except StopIteration:
-                _log.debug(
-                    "read %s / %s", len(self.buf), sum([len(x) for x in self.buf])
-                )
+                _log.debug("read %s / %s", len(self.buf), sum([len(x) for x in self.buf]))
             buf = self.buf
             self.buf = []
             self.eof = True
