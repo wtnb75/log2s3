@@ -2,6 +2,7 @@ import os
 import pathlib
 import time
 import shutil
+from click.core import UNSET
 from logging import getLogger
 from typing import Optional, Sequence
 from abc import ABC, abstractmethod
@@ -34,7 +35,7 @@ class FileProcessor(ABC):
             newer = pytimeparse.parse(self.config["newer"])
             if newer is not None and mtime < time.time() - newer:
                 return False
-        if "date" in self.config:
+        if "date" in self.config and self.config["data"] != UNSET:
             mtime_datetime = datetime.datetime.fromtimestamp(mtime)
             if ".." in self.config["date"]:
                 fromdate, todate = [
