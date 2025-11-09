@@ -61,17 +61,11 @@ def cli(ctx):
 
 def s3_option(func):
     @click.option("--s3-access-key", envvar="AWS_ACCESS_KEY_ID", help="AWS Access Key")
-    @click.option(
-        "--s3-secret-key", envvar="AWS_SECRET_ACCESS_KEY", help="AWS Secret Key"
-    )
+    @click.option("--s3-secret-key", envvar="AWS_SECRET_ACCESS_KEY", help="AWS Secret Key")
     @click.option("--s3-region", envvar="AWS_DEFAULT_REGION", help="AWS Region")
-    @click.option(
-        "--s3-endpoint", envvar="AWS_ENDPOINT_URL_S3", help="AWS Endpoint URL for S3"
-    )
+    @click.option("--s3-endpoint", envvar="AWS_ENDPOINT_URL_S3", help="AWS Endpoint URL for S3")
     @click.option("--s3-bucket", envvar="AWS_S3_BUCKET", help="AWS S3 Bucket name")
-    @click.option(
-        "--dotenv/--no-dotenv", default=False, help="load .env for S3 client config"
-    )
+    @click.option("--dotenv/--no-dotenv", default=False, help="load .env for S3 client config")
     @functools.wraps(func)
     def _(
         s3_endpoint,
@@ -125,9 +119,7 @@ def filetree_option(func):
     @click.option("--bigger", help="find bigger file")
     @click.option("--smaller", help="find smaller file")
     @click.option("--glob", help="glob pattern")
-    @click.option(
-        "--dry/--wet", help="dry run or wet run", default=False, show_default=True
-    )
+    @click.option("--dry/--wet", help="dry run or wet run", default=False, show_default=True)
     @functools.wraps(func)
     def _(top, older, newer, date, bigger, smaller, glob, dry, **kwargs):
         config = {
@@ -235,8 +227,7 @@ def allobjs_conf(s3: S3ClientType, bucket_name: str, prefix: str, config: dict):
     suffix = config.get("suffix", "")
     objs = allobjs(s3, bucket_name, prefix)
     return filter(
-        lambda x: x["Key"].endswith(suffix)
-        and dummy.check(pathlib.Path(x["Key"]), s3obj2stat(x)),
+        lambda x: x["Key"].endswith(suffix) and dummy.check(pathlib.Path(x["Key"]), s3obj2stat(x)),
         objs,
     )
 
@@ -304,16 +295,10 @@ def s3_du(
 @s3_option
 @s3tree_option
 @verbose_option
-@click.option(
-    "--dry/--wet", help="dry run or wet run", default=False, show_default=True
-)
-def s3_delete_by(
-    s3: S3ClientType, bucket_name: str, top: pathlib.Path, config: dict, dry: bool
-):
+@click.option("--dry/--wet", help="dry run or wet run", default=False, show_default=True)
+def s3_delete_by(s3: S3ClientType, bucket_name: str, top: pathlib.Path, config: dict, dry: bool):
     """delete S3 objects"""
-    del_keys = [
-        x["Key"] for x in allobjs_conf(s3, bucket_name, str(top).lstrip("/"), config)
-    ]
+    del_keys = [x["Key"] for x in allobjs_conf(s3, bucket_name, str(top).lstrip("/"), config)]
     if len(del_keys) == 0:
         _log.info("no object found")
     elif dry:
@@ -321,9 +306,7 @@ def s3_delete_by(
         click.echo(f"(dry)remove {len(del_keys)} objects")
     else:
         _log.info("(wet)remove %s objects", len(del_keys))
-        s3.delete_objects(
-            Bucket=bucket_name, Delete={"Objects": [{"Key": x} for x in del_keys]}
-        )
+        s3.delete_objects(Bucket=bucket_name, Delete={"Objects": [{"Key": x} for x in del_keys]})
 
 
 @cli.command()
@@ -331,9 +314,7 @@ def s3_delete_by(
 @filetree_option
 @verbose_option
 @click.option("--prefix", default="", help="AWS S3 Object Prefix")
-@click.option(
-    "--content/--stat", help="diff content or stat", default=False, show_default=True
-)
+@click.option("--content/--stat", help="diff content or stat", default=False, show_default=True)
 def s3_diff(
     s3: S3ClientType,
     bucket_name: str,
@@ -343,10 +324,7 @@ def s3_diff(
     content: bool,
 ):
     """diff S3 and filetree"""
-    all_keys = {
-        pathlib.Path(x["Key"][len(prefix) :]): x
-        for x in allobjs_conf(s3, bucket_name, prefix, config)
-    }
+    all_keys = {pathlib.Path(x["Key"][len(prefix) :]): x for x in allobjs_conf(s3, bucket_name, prefix, config)}
     from .processor import ListProcessor, process_walk
 
     lp = ListProcessor(config)
@@ -358,10 +336,7 @@ def s3_diff(
         click.echo("only-file: %s: %s" % (k, files[k]))
     for k in set(files.keys()) & set(all_keys.keys()):
         if files[k].st_size != all_keys[k].get("Size"):
-            click.echo(
-                "size mismatch %s file=%s, obj=%s"
-                % (k, files[k].st_size, all_keys[k]["Size"])
-            )
+            click.echo("size mismatch %s file=%s, obj=%s" % (k, files[k].st_size, all_keys[k]["Size"]))
 
 
 @cli.command()
@@ -369,12 +344,8 @@ def s3_diff(
 @s3tree_option
 @verbose_option
 @compress_option
-@click.option(
-    "--dry/--wet", help="dry run or wet run", default=False, show_default=True
-)
-@click.option(
-    "--keep/--remove", help="keep old file or delete", default=True, show_default=True
-)
+@click.option("--dry/--wet", help="dry run or wet run", default=False, show_default=True)
+@click.option("--keep/--remove", help="keep old file or delete", default=True, show_default=True)
 def s3_compress_tree(
     s3: S3ClientType,
     bucket_name: str,
@@ -440,19 +411,14 @@ def filetree_list(top: pathlib.Path, config: dict):
 
     lp = ListProcessor(config)
     process_walk(top, [lp])
-    click.echo(
-        "%10s %-19s %s    %d(+%d) total"
-        % ("size", "mtime", "name", lp.processed, lp.skipped)
-    )
+    click.echo("%10s %-19s %s    %d(+%d) total" % ("size", "mtime", "name", lp.processed, lp.skipped))
     click.echo("----------+-------------------+-----------------------")
     for p, st in lp.output:
         if st is None:
             tmstr = "unknown"
             sz = -1
         else:
-            tmstr = datetime.datetime.fromtimestamp(st.st_mtime).strftime(
-                "%Y-%m-%d %H:%M:%S"
-            )
+            tmstr = datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
             sz = st.st_size
         click.echo("%10s %19s %s" % (sz, tmstr, p))
 
@@ -554,9 +520,7 @@ def s3_put_tree(
 @cli.command()
 @s3_option
 @click.option("--key", required=True, help="AWS S3 Object Key")
-@click.argument(
-    "filename", type=click.Path(file_okay=True, dir_okay=False, exists=True)
-)
+@click.argument("filename", type=click.Path(file_okay=True, dir_okay=False, exists=True))
 @compress_option
 @verbose_option
 def s3_put1(s3: S3ClientType, bucket_name: str, key: str, filename: str, compress: str):
@@ -608,9 +572,7 @@ def s3_less(s3: S3ClientType, bucket_name: str, key: str):
 @cli.command()
 @s3_option
 @click.argument("key")
-@click.option(
-    "--dry/--wet", help="dry run or wet run", default=False, show_default=True
-)
+@click.option("--dry/--wet", help="dry run or wet run", default=False, show_default=True)
 @verbose_option
 def s3_vi(s3: S3ClientType, bucket_name: str, key: str, dry):
     """edit compressed object and overwrite"""
@@ -669,9 +631,7 @@ def s3_merge(s3: S3ClientType, bucket_name: str, keys: list[str]):
 @cli.command()
 @s3_option
 @click.argument("keys", nargs=-1)
-@click.option(
-    "--dry/--wet", help="dry run or wet run", default=False, show_default=True
-)
+@click.option("--dry/--wet", help="dry run or wet run", default=False, show_default=True)
 @verbose_option
 def s3_del(s3: S3ClientType, bucket_name: str, keys: list[str], dry):
     """delete objects"""
@@ -682,9 +642,7 @@ def s3_del(s3: S3ClientType, bucket_name: str, keys: list[str], dry):
         _log.info("(dry) delete %s keys", len(keys))
     else:
         _log.info("(wet) delete %s keys", len(keys))
-        s3.delete_objects(
-            Bucket=bucket_name, Delete={"Objects": [{"Key": x} for x in keys]}
-        )
+        s3.delete_objects(Bucket=bucket_name, Delete={"Objects": [{"Key": x} for x in keys]})
 
 
 @cli.command()
@@ -711,9 +669,7 @@ def s3_list_parts(s3: S3ClientType, bucket_name: str, cleanup):
         click.echo("%s %s %s" % (upl["Initiated"], upl["UploadId"], upl["Key"]))
         if cleanup:
             _log.info("cleanup %s/%s", upl["Key"], upl["UploadId"])
-            s3.abort_multipart_upload(
-                Bucket=bucket_name, Key=upl["Key"], UploadId=upl["UploadId"]
-            )
+            s3.abort_multipart_upload(Bucket=bucket_name, Key=upl["Key"], UploadId=upl["UploadId"])
 
 
 @cli.command("cat")
@@ -748,9 +704,7 @@ def view_file(filename: str):
     "filename",
     type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True),
 )
-@click.option(
-    "--dry/--wet", help="dry run or wet run", default=False, show_default=True
-)
+@click.option("--dry/--wet", help="dry run or wet run", default=False, show_default=True)
 @verbose_option
 def edit_file(filename: str, dry):
     """edit compressed file and overwrite"""
@@ -848,9 +802,7 @@ def compress_benchmark(compress, file):
                 "bench": bench_decomp,
             },
         ).autorange()
-        wr.writerow(
-            [str(x) for x in [mode, rate, isz * cnum / csec, isz * dnum / dsec]]
-        )
+        wr.writerow([str(x) for x in [mode, rate, isz * cnum / csec, isz * dnum / dsec]])
 
 
 @cli.command()
@@ -861,9 +813,7 @@ def compress_benchmark(compress, file):
     default="combined",
     show_default=True,
 )
-@click.option(
-    "--nth", type=int, default=1, show_default=True, help="parse from n-th '{'"
-)
+@click.option("--nth", type=int, default=1, show_default=True, help="parse from n-th '{'")
 @click.argument("file", type=click.Path(exists=True, file_okay=True, dir_okay=False))
 def traefik_json_convert(file, nth, format):
     """
@@ -909,9 +859,7 @@ def traefik_json_convert(file, nth, format):
         try:
             jsdata: dict = json.loads(jsonstr)
             if "time" in jsdata:
-                ts = datetime.datetime.fromisoformat(
-                    jsdata.get("time", "")
-                ).astimezone()
+                ts = datetime.datetime.fromisoformat(jsdata.get("time", "")).astimezone()
                 jsdata["httptime"] = ts.strftime(dateformat)
             click.echo(fmt % defaultdict(lambda: "-", **jsdata))
         except json.JSONDecodeError:
@@ -1121,12 +1069,8 @@ def try_read(file: str) -> Union[list[dict], dict]:
 
 @cli.command()
 @verbose_option
-@click.option(
-    "--dry/--wet", help="dry run or wet run", default=False, show_default=True
-)
-@click.argument(
-    "file", type=click.Path(file_okay=True, dir_okay=False, readable=True, exists=True)
-)
+@click.option("--dry/--wet", help="dry run or wet run", default=False, show_default=True)
+@click.argument("file", type=click.Path(file_okay=True, dir_okay=False, readable=True, exists=True))
 def ible_playbook(file, dry):
     """do log2s3-ible playbook"""
     do_ible(convert_ible(try_read(file)), dry)
@@ -1165,9 +1109,7 @@ def sh_dump(data, output):
 @cli.command()
 @verbose_option
 @click.option("--format", type=click.Choice(["yaml", "json", "sh"]))
-@click.argument(
-    "file", type=click.Path(file_okay=True, dir_okay=False, readable=True, exists=True)
-)
+@click.argument("file", type=click.Path(file_okay=True, dir_okay=False, readable=True, exists=True))
 @click.option("--output", type=click.File("w"), default="-")
 def ible_convert(file, format, output):
     """convert log2s3-ible playbook"""

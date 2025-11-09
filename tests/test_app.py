@@ -111,16 +111,12 @@ class TestApp(unittest.TestCase):
         self.assertEqual(self.raw_content, res.text)
 
     def test_read_decompress(self):
-        res = self.client.get(
-            "/read/baz/2024-02-11.log", headers={"accept-encoding": "raw"}
-        )
+        res = self.client.get("/read/baz/2024-02-11.log", headers={"accept-encoding": "raw"})
         self.assertEqual(200, res.status_code)
         self.assertEqual(self.raw_content, res.text)
 
     def test_read_compressed(self):
-        res = self.client.get(
-            "/read/baz/2024-02-11.log", headers={"accept-encoding": "gzip, br"}
-        )
+        res = self.client.get("/read/baz/2024-02-11.log", headers={"accept-encoding": "gzip, br"})
         self.assertEqual(200, res.status_code)
         self.assertEqual(self.gz_content, res.content)
 
@@ -129,9 +125,7 @@ class TestApp(unittest.TestCase):
         self.assertEqual(403, res.status_code)
 
     def test_read_notfound(self):
-        res = self.client.get(
-            "/read/baz/2099-02-11.log", headers={"accept-encoding": "gzip, br"}
-        )
+        res = self.client.get("/read/baz/2099-02-11.log", headers={"accept-encoding": "gzip, br"})
         self.assertEqual(404, res.status_code)
 
     def test_read_html1(self):

@@ -54,9 +54,7 @@ class TestProcessor(unittest.TestCase):
         dt = datetime.now() - timedelta(days=3)
         dt2 = datetime.now() - timedelta(days=1)
 
-        dp = DelProcessor(
-            {"date": dt.strftime("%Y-%m-%d") + ".." + dt2.strftime("%Y-%m-%d")}
-        )
+        dp = DelProcessor({"date": dt.strftime("%Y-%m-%d") + ".." + dt2.strftime("%Y-%m-%d")})
         process_walk(self.basedir, [dp])
         cnts = self._count()
         self.assertEqual(pre_cnts[0] - 10, cnts[0])
@@ -76,9 +74,7 @@ class TestProcessor(unittest.TestCase):
 
     def test_compress1_dry(self):
         pre_cnts = self._count()
-        dp = CompressProcessor(
-            {"older": "2d", "bigger": "1k", "compress": "gzip", "dry": True}
-        )
+        dp = CompressProcessor({"older": "2d", "bigger": "1k", "compress": "gzip", "dry": True})
         process_walk(self.basedir, [dp])
         cnts = self._count()
         self.assertEqual(pre_cnts, cnts)

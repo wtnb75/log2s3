@@ -38,10 +38,7 @@ class FileProcessor(ABC):
         if "date" in self.config and self.config["date"] != UNSET:
             mtime_datetime = datetime.datetime.fromtimestamp(mtime)
             if ".." in self.config["date"]:
-                fromdate, todate = [
-                    datetime.datetime.fromisoformat(x)
-                    for x in self.config["date"].split("..", 1)
-                ]
+                fromdate, todate = [datetime.datetime.fromisoformat(x) for x in self.config["date"].split("..", 1)]
                 if not fromdate <= mtime_datetime < todate:
                     return False
             else:
@@ -80,11 +77,7 @@ class FileProcessor(ABC):
     def check(self, fname: pathlib.Path, stat: Optional[os.stat_result]) -> bool:
         if stat is None:
             stat = fname.stat()
-        res = (
-            self.check_date_range(stat.st_mtime)
-            and self.check_size_range(stat.st_size)
-            and self.check_name(fname)
-        )
+        res = self.check_date_range(stat.st_mtime) and self.check_size_range(stat.st_size) and self.check_name(fname)
         if res:
             self.processed += 1
         else:

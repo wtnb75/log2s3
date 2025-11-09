@@ -31,9 +31,7 @@ def uri2file(file_path: str) -> Path:
     target = (working_dir / file_path).resolve()
     if working_dir.resolve().absolute() not in target.resolve().absolute().parents:
         if not (target.exists() and target.samefile(working_dir)):
-            _log.warning(
-                "out of path: wdir=%s, target=%s", working_dir, target.resolve()
-            )
+            _log.warning("out of path: wdir=%s, target=%s", working_dir, target.resolve())
             raise HTTPException(status_code=403, detail=f"cannot access to {file_path}")
     return target
 
@@ -84,11 +82,7 @@ def read_file(response: Response, file_path: str, accept_encoding: str = Header(
     if target.exists():
         raise HTTPException(status_code=403, detail=f"cannot access to {file_path}")
     # compressed case
-    target_compressed = [
-        x
-        for x in target.parent.iterdir()
-        if x.is_file() and x.name.startswith(target.name + ".")
-    ]
+    target_compressed = [x for x in target.parent.iterdir() if x.is_file() and x.name.startswith(target.name + ".")]
     for p in target_compressed:
         _, stream = auto_compress_stream(p, "decompress")
         _log.info("auto decompress %s: %s", acc, p)
@@ -136,11 +130,7 @@ def list_dir(file_path: str, file_prefix: str = "") -> dict[str, dict[str, str]]
         elif target.is_dir():
             for root, _, filenames in target.walk():
                 root = Path(root)
-                files = [
-                    root / x
-                    for x in filenames
-                    if Path(x).suffix in (exts | {".log", ".txt"})
-                ]
+                files = [root / x for x in filenames if Path(x).suffix in (exts | {".log", ".txt"})]
                 files = [x for x in files if x.name.startswith(file_prefix)]
                 for x in files:
                     reg_file(res, x)
@@ -165,9 +155,7 @@ def html1(file_path: str, month=month_query):
         for title, files in ldir.items():
             buf = io.StringIO()
             uri = uriescape(f"html1/{title}")
-            buf.write(
-                '<div style="border: 1px solid black; float: left; margin: 10px; padding: 1em;">'
-            )
+            buf.write('<div style="border: 1px solid black; float: left; margin: 10px; padding: 1em;">')
             buf.write(f'<h2><a href="{uri}">{title}</a></h2><ul>')
             premonth = None
             for dtstr in sorted(files.keys()):
@@ -183,9 +171,7 @@ def html1(file_path: str, month=month_query):
                 linkhtml = f'<a href="{uri}">{dt.strftime("%d")}</a>'
                 color = api_config.get("weekday_colors", {}).get(dt.weekday())
                 if color is not None:
-                    buf.write(
-                        f' <span style="background-color: {color};">{linkhtml}</span>'
-                    )
+                    buf.write(f' <span style="background-color: {color};">{linkhtml}</span>')
                 else:
                     buf.write(f" {linkhtml}")
             buf.write("</li></ul>")
@@ -202,9 +188,7 @@ def html1(file_path: str, month=month_query):
 def html2_gen1(uri: str, month: str, files: dict[str, str]) -> str:
     dt = datetime.datetime.strptime(month, "%Y-%m").date()
     buf = io.StringIO()
-    buf.write(
-        f'<tr><th colspan="7"><a href="{uri}?month={month}">{month}</a></th></tr>'
-    )
+    buf.write(f'<tr><th colspan="7"><a href="{uri}?month={month}">{month}</a></th></tr>')
     wday = (dt.weekday() + 1) % 7
     buf.write('<tr align="right">')
     if wday != 0:
@@ -255,9 +239,7 @@ def html2_gen(ldir: dict[str, dict[str, str]], file_path: str):
             wdstr = wd.strftime("%a")
             color = api_config.get("weekday_colors", {}).get(wd.weekday())
             if color:
-                buf.write(
-                    f'<th style="background-color: {color};"><code>{wdstr}</code></th>'
-                )
+                buf.write(f'<th style="background-color: {color};"><code>{wdstr}</code></th>')
             else:
                 buf.write(f"<th><code>{wdstr}</code></th>")
         buf.write("</tr>")
@@ -292,17 +274,13 @@ def find_target(p: Path, accepts: list[str]) -> Path:
         if p.with_suffix(p.suffix + ".br").exists():
             return p.with_suffix(p.suffix + ".br")
     # compressed case
-    target_compressed = [
-        x for x in p.parent.iterdir() if x.is_file() and x.name.startswith(p.name + ".")
-    ]
+    target_compressed = [x for x in p.parent.iterdir() if x.is_file() and x.name.startswith(p.name + ".")]
     if len(target_compressed):
         return target_compressed[0]
     raise HTTPException(status_code=404, detail=f"not found: {p}")
 
 
-def get_streams(
-    files: dict[str, dict[str, str]], accepts: list[str]
-) -> tuple[list[Stream], dict]:
+def get_streams(files: dict[str, dict[str, str]], accepts: list[str]) -> tuple[list[Stream], dict]:
     outputs: dict[str, list[str]] = {}
     for _, v in files.items():
         for k, fn in v.items():
@@ -335,9 +313,7 @@ def cat_file(file_path: str, month=month_query):
         raise HTTPException(status_code=404, detail=f"not found: {file_path}")
     streams, hdrs = get_streams(ldir, [])
     # daily sort
-    return StreamingResponse(
-        content=CatStream(streams).gen(), media_type=media_type, headers=hdrs
-    )
+    return StreamingResponse(content=CatStream(streams).gen(), media_type=media_type, headers=hdrs)
 
 
 @router.get("/merge/{file_path:path}")
@@ -348,6 +324,4 @@ def merge_file(file_path: str, month=month_query):
         raise HTTPException(status_code=404, detail=f"not found: {file_path}")
     streams, hdrs = get_streams(ldir, [])  # cannot do passthrough compression
     # daily sort
-    return StreamingResponse(
-        content=MergeStream(streams).gen(), media_type=media_type, headers=hdrs
-    )
+    return StreamingResponse(content=MergeStream(streams).gen(), media_type=media_type, headers=hdrs)

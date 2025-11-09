@@ -21,9 +21,7 @@ class FileReadStream(Stream):
     Read from file, stream interface
     """
 
-    def __init__(
-        self, file_like: io.RawIOBase | io.BufferedReader, bufsize=10 * 1024 * 1024
-    ):
+    def __init__(self, file_like: io.RawIOBase | io.BufferedReader, bufsize=10 * 1024 * 1024):
         self.fd = file_like
         self.bufsize = bufsize
 
@@ -79,9 +77,7 @@ class S3GetStream(Stream):
     Read data from S3 object with chunked read.
     """
 
-    def __init__(
-        self, s3_client: S3ClientType, bucket: str, key: str, bufsize=1024 * 1024
-    ):
+    def __init__(self, s3_client: S3ClientType, bucket: str, key: str, bufsize=1024 * 1024):
         self.obj = s3_client.get_object(Bucket=bucket, Key=key)
         self.bufsize = bufsize
 
@@ -389,15 +385,11 @@ try:
 except ImportError:
     pass
 
-stream_ext: dict[str, tuple[str, type[Stream], type[Stream]]] = {
-    v[0]: (k, *v[1:]) for k, v in stream_map.items()
-}
+stream_ext: dict[str, tuple[str, type[Stream], type[Stream]]] = {v[0]: (k, *v[1:]) for k, v in stream_map.items()}
 stream_compress_modes = list(stream_map.keys()) + ["decompress", "raw"]
 
 
-def auto_compress_stream(
-    ifname: pathlib.Path, mode: str, ifp: Optional[Stream] = None
-) -> tuple[os.PathLike, Stream]:
+def auto_compress_stream(ifname: pathlib.Path, mode: str, ifp: Optional[Stream] = None) -> tuple[os.PathLike, Stream]:
     if ifp is None:
         ifp = FileReadStream(ifname.open("br"))
     if mode == "raw":
