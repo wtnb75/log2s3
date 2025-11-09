@@ -94,7 +94,7 @@ def s3_option(func):
             "region_name": s3_region,
             "endpoint_url": s3_endpoint,
         }
-        empty_keys = {k for k, v in args.items() if v is None}
+        empty_keys = {k for k, v in args.items() if v is None or v == UNSET}
         for k in empty_keys:
             args.pop(k)
         s3 = boto3.client("s3", **args)
@@ -956,14 +956,14 @@ def arg2arg(fn: click.Command, args: dict, baseparam: dict) -> dict:
                     break
         elif isinstance(opt.envvar, str) and opt.envvar and os.getenv(opt.envvar):
             params[opt.name] = os.getenv(opt.envvar)
-        elif (opt.default or not opt.required) and opt.default != UNSET:
+        elif opt.default or not opt.required:
             params[opt.name] = opt.default
     pnames = [x.name for x in fn.params]
     for name in pnames:
         if name in args:
             if args[name] != UNSET:
                 params[name] = args[name]
-        elif name in baseparam and baseparam[name] != UNSET:
+        elif name in baseparam:
             params[name] = baseparam[name]
     _log.debug("arg=%s, base=%s, result=%s", args, baseparam, params)
     return params

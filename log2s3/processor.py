@@ -27,11 +27,11 @@ class FileProcessor(ABC):
         self.skipped = 0
 
     def check_date_range(self, mtime: float) -> bool:
-        if "older" in self.config:
+        if "older" in self.config and self.config["older"] != UNSET:
             older = pytimeparse.parse(self.config["older"])
             if older is not None and mtime > time.time() - older:
                 return False
-        if "newer" in self.config:
+        if "newer" in self.config and self.config["newer"] != UNSET:
             newer = pytimeparse.parse(self.config["newer"])
             if newer is not None and mtime < time.time() - newer:
                 return False
@@ -52,27 +52,27 @@ class FileProcessor(ABC):
         return True
 
     def check_size_range(self, size: int) -> bool:
-        if "smaller" in self.config:
+        if "smaller" in self.config and self.config["smaller"] != UNSET:
             smaller = humanfriendly.parse_size(self.config["smaller"], True)
             if size > smaller:
                 return False
-        if "bigger" in self.config:
+        if "bigger" in self.config and self.config["bigger"] != UNSET:
             bigger = humanfriendly.parse_size(self.config["bigger"], True)
             if size < bigger:
                 return False
         return True
 
     def check_name(self, fname: pathlib.Path) -> bool:
-        if "suffix" in self.config:
+        if "suffix" in self.config and self.config["suffix"] != UNSET:
             if not str(fname).endswith(self.config["suffix"]):
                 return False
-        if "prefix" in self.config:
+        if "prefix" in self.config and self.config["prefix"] != UNSET:
             if not str(fname).startswith(self.config["prefix"]):
                 return False
-        if "glob" in self.config:
+        if "glob" in self.config and self.config["glob"] != UNSET:
             if not fname.match(self.config["glob"]):
                 return False
-        if "iglob" in self.config:
+        if "iglob" in self.config and self.config["iglob"] != UNSET:
             if not fname.match(self.config["iglob"], case_sensitive=False):
                 return False
         return True
