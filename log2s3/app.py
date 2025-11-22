@@ -19,7 +19,7 @@ api_config: dict[str, Any] = {
     "today_color": "yellow",
 }
 exts = set(stream_ext.keys())
-month_query = Query(pattern="(^[0-9]{4}|^$)", default="")
+month_query = Query(pattern="(^[0-9]{4}|all|^$)", default="")
 
 
 def update_config(conf: dict):
@@ -223,11 +223,22 @@ def html2_gen1(uri: str, month: str, files: dict[str, str]) -> str:
     return buf.getvalue()
 
 
-def html2_gen(ldir: dict[str, dict[str, str]], file_path: str):
+def html2_gen(ldir: dict[str, dict[str, str]], file_path: str, current_month: str):
     buf = io.StringIO()
     buf.write(f"<html><title>{file_path}</title><body>")
-    thismonth = datetime.date.today().strftime("%Y-%m")
-    buf.write(f'<p><a href="?month={thismonth}">this month</a></p>')
+    if current_month in ("", "all"):
+        current_month = datetime.date.today().strftime("%Y-%m")
+    today = datetime.date.strptime(current_month, "%Y-%m")
+    lastm = today - datetime.timedelta(days=1)
+    nextm = today + datetime.timedelta(days=31)
+    fmt = "%Y-%m"
+    buf.write("<div>")
+    buf.write(f'<a href="?month={lastm.strftime(fmt)}">{lastm.strftime(fmt)}</a>')
+    buf.write(f' | <a href="?month={today.strftime(fmt)}">{today.strftime(fmt)}</a>')
+    buf.write(f' | <a href="?month={nextm.strftime(fmt)}">{nextm.strftime(fmt)}</a>')
+    buf.write(' | <a href="?month=all">all time</a>')
+    buf.write(' | <a href="./">this month</a>')
+    buf.write("</div>")
     for title, files in ldir.items():
         uri = uriescape(f"html2/{title}")
         buf.write('<div style="float: left; margin: 1em;">')
@@ -255,10 +266,14 @@ def html2_gen(ldir: dict[str, dict[str, str]], file_path: str):
 
 @router.get("/html2/{file_path:path}")
 def html2(file_path: str, month=month_query):
+    if not month:
+        month = datetime.date.today().strftime("%Y-%m")
+    if month == "all":
+        month = ""
     ldir = list_dir(file_path, month)
     if len(ldir) == 0:
         raise HTTPException(status_code=404, detail=f"not found: {file_path}")
-    return StreamingResponse(content=html2_gen(ldir, file_path), media_type="text/html")
+    return StreamingResponse(content=html2_gen(ldir, file_path, month), media_type="text/html")
 
 
 def find_target(p: Path, accepts: list[str]) -> Path:

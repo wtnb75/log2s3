@@ -147,7 +147,7 @@ class TestApp(unittest.TestCase):
         self.assertEqual(404, res.status_code)
 
     def test_read_html2(self):
-        res = self.client.get("/html2/ba")
+        res = self.client.get("/html2/ba", params={"month": "all"})
         self.assertEqual(200, res.status_code)
         self.assertIn("text/html", res.headers.get("content-type"))
         self.assertIn("2024-01-04", res.text)
@@ -158,7 +158,8 @@ class TestApp(unittest.TestCase):
         self.assertEqual(200, res.status_code)
         self.assertIn("text/html", res.headers.get("content-type"))
         self.assertIn("2024-01-04", res.text)
-        self.assertNotIn("2024-02", res.text)
+        self.assertIn("2024-02", res.text)
+        self.assertNotIn("2024-03", res.text)
 
     def test_read_html2_notfound(self):
         res = self.client.get("/html2/ba", params={"month": "2025-01"})
