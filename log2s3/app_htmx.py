@@ -512,11 +512,12 @@ def _full_page_gen(dirs: list[str], selected: str, month: str, date: str) -> Gen
     yield '<div id="tabs">'
     for d in dirs:
         cls = "tab-btn active" if d == selected else "tab-btn"
-        main_url = html.escape(_u("_main", d), quote=True)
-        push_url = html.escape(_u(d), quote=True) + f"?month={month}"
+        month_qs = urlencode({"month": month})
+        main_url = html.escape(f'{_u("_main", d)}?{month_qs}', quote=True)
+        push_url = html.escape(f'{_u(d)}?{month_qs}', quote=True)
         yield (
             f'<a class="{cls}" href="{push_url}"'
-            f' hx-get="{main_url}?month={month}"'
+            f' hx-get="{main_url}"'
             f' hx-target="#main-area" hx-push-url="{push_url}">'
             f"{html.escape(d)}</a>"
         )
