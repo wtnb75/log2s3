@@ -5,7 +5,7 @@ import json
 from typing import Generator
 from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse, HTMLResponse
-from .app import api_config, uri2file, list_dir
+from .app import uri2file, list_dir
 from .compr_stream import auto_compress_stream, stream_ext
 from logging import getLogger
 
@@ -15,7 +15,6 @@ _log = getLogger(__name__)
 _htmx_base = "/htmx"
 _exts = set(stream_ext.keys())
 _PAGE_SIZE = 200
-_FOLD_THRESHOLD = 200
 
 
 def update_config(conf: dict):
@@ -39,67 +38,172 @@ def _u(*parts: str) -> str:
 # ---------------------------------------------------------------------------
 
 _CSS = """
-body { font-family: monospace; margin: 0; padding: 0; }
+:root {
+    --bg:#fff; --fg:#333; --border:#ccc;
+    --tabs-bg:#f0f0f0; --tab-bg:#fff; --tab-fg:#333;
+    --tab-active-bg:#333; --tab-active-fg:#fff;
+    --link:#0066cc; --th-bg:#eee;
+    --log-border:#eee; --line-link:#aaa;
+    --json-color:#666; --json-pre-bg:#f8f8f8;
+    --btn-bg:#f0f0f0; --btn-hover:#ddd;
+    --highlight:#ffffaa; --mark-bg:#ff0;
+    --cal-sat:lightyellow; --cal-sun:lightcyan; --cal-today:yellow;
+}
+[data-theme="dark"] {
+    --bg:#1a1a1a; --fg:#d4d4d4; --border:#444;
+    --tabs-bg:#252525; --tab-bg:#2d2d2d; --tab-fg:#ccc;
+    --tab-active-bg:#ccc; --tab-active-fg:#1a1a1a;
+    --link:#5baeff; --th-bg:#2d2d2d;
+    --log-border:#2a2a2a; --line-link:#555;
+    --json-color:#888; --json-pre-bg:#252525;
+    --btn-bg:#2d2d2d; --btn-hover:#3d3d3d;
+    --highlight:#554400; --mark-bg:#806600;
+    --cal-sat:#3a3a10; --cal-sun:#103a3a; --cal-today:#4a3a00;
+}
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --bg:#1a1a1a; --fg:#d4d4d4; --border:#444;
+        --tabs-bg:#252525; --tab-bg:#2d2d2d; --tab-fg:#ccc;
+        --tab-active-bg:#ccc; --tab-active-fg:#1a1a1a;
+        --link:#5baeff; --th-bg:#2d2d2d;
+        --log-border:#2a2a2a; --line-link:#555;
+        --json-color:#888; --json-pre-bg:#252525;
+        --btn-bg:#2d2d2d; --btn-hover:#3d3d3d;
+        --highlight:#554400; --mark-bg:#806600;
+        --cal-sat:#3a3a10; --cal-sun:#103a3a; --cal-today:#4a3a00;
+    }
+}
+body { font-family: monospace; margin: 0; padding: 0; background: var(--bg); color: var(--fg); }
 #tabs {
-    display: flex; gap: 4px; padding: 8px;
-    background: #f0f0f0; border-bottom: 1px solid #ccc; flex-wrap: wrap;
+    display: flex; gap: 4px; padding: 8px; align-items: center;
+    background: var(--tabs-bg); border-bottom: 1px solid var(--border); flex-wrap: wrap;
 }
 .tab-btn {
     padding: 4px 12px; cursor: pointer;
-    border: 1px solid #ccc; background: white;
-    text-decoration: none; color: #333;
+    border: 1px solid var(--border); background: var(--tab-bg);
+    text-decoration: none; color: var(--tab-fg);
 }
-.tab-btn.active { background: #333; color: white; border-color: #333; }
+.tab-btn.active { background: var(--tab-active-bg); color: var(--tab-active-fg); border-color: var(--tab-active-bg); }
+#theme-toggle {
+    margin-left: auto; cursor: pointer; padding: 2px 8px; font-size: 14px;
+    border: 1px solid var(--border); background: var(--btn-bg); color: var(--fg);
+}
 #main-area { padding: 8px; }
 .month-nav { margin-bottom: 8px; }
-.month-nav a { margin: 0 6px; text-decoration: none; color: #0066cc; }
+.month-nav a { margin: 0 6px; text-decoration: none; color: var(--link); }
 table { border-collapse: collapse; margin-bottom: 8px; }
 td, th {
-    border: 1px solid #ccc; padding: 2px 8px;
+    border: 1px solid var(--border); padding: 2px 8px;
     text-align: right; min-width: 2em;
 }
-th { background: #eee; }
-td a { text-decoration: none; color: #0066cc; }
+th { background: var(--th-bg); }
+td a { text-decoration: none; color: var(--link); }
 #search {
     width: 100%; box-sizing: border-box;
     margin-bottom: 8px; padding: 4px;
     font-family: monospace; font-size: 13px;
+    background: var(--tab-bg); color: var(--fg); border: 1px solid var(--border);
 }
 #log-content { font-family: monospace; font-size: 12px; }
-.log-line { border-bottom: 1px solid #eee; padding: 2px 4px; }
+.log-line { border-bottom: 1px solid var(--log-border); padding: 2px 4px; }
 .log-line:hover .line-link { visibility: visible; }
 .line-link {
     visibility: hidden; text-decoration: none;
-    color: #aaa; padding-right: 4px; font-size: 10px;
+    color: var(--line-link); padding-right: 4px; font-size: 10px;
 }
 details.json-block > summary {
-    color: #666; cursor: pointer; font-style: italic;
+    color: var(--json-color); cursor: pointer; font-style: italic;
 }
 details.json-block > pre {
     margin: 0; padding: 4px 16px;
-    background: #f8f8f8; overflow-x: auto;
+    background: var(--json-pre-bg); overflow-x: auto;
 }
-details.log-line > summary { cursor: pointer; }
-.line-highlight { background: #ffffaa; }
+.copy-btn {
+    float: right; font-size: 10px; padding: 1px 6px;
+    cursor: pointer; border: 1px solid var(--border);
+    background: var(--btn-bg); color: var(--fg); margin: 2px 4px;
+}
+.copy-btn:hover { background: var(--btn-hover); }
+details.log-line > summary {
+    cursor: pointer;
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+details.log-line[open] > summary {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+}
+.line-highlight { background: var(--highlight); }
 .sentinel { height: 1px; }
+mark { background: var(--mark-bg); padding: 0 1px; border-radius: 2px; }
+.wd-5 { background: var(--cal-sat); }
+.wd-6 { background: var(--cal-sun); }
+.wd-today { background: var(--cal-today); }
 """
+
+# Applied synchronously in <head> to avoid flash of unstyled content
+_THEME_INIT = (
+    "(function(){var t=localStorage.getItem('theme');if(t)document.documentElement.setAttribute('data-theme',t);})();"
+)
 
 _JS = r"""
 (function () {
-    // Scroll to #line-N from URL hash after htmx settles
-    var targetId = location.hash ? location.hash.slice(1) : null;
-    if (!targetId || !targetId.startsWith("line-")) return;
-
-    function tryScroll() {
-        var el = document.getElementById(targetId);
-        if (!el) return;
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
-        el.classList.add("line-highlight");
-        document.removeEventListener("htmx:afterSettle", tryScroll);
+    function currentTheme() {
+        return document.documentElement.getAttribute("data-theme") ||
+            (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
     }
 
-    document.addEventListener("DOMContentLoaded", tryScroll);
-    document.addEventListener("htmx:afterSettle", tryScroll);
+    document.addEventListener("DOMContentLoaded", function () {
+        // Theme toggle — getElementById requires DOM to be ready
+        var themeBtn = document.getElementById("theme-toggle");
+        function applyTheme(t) {
+            document.documentElement.setAttribute("data-theme", t);
+            themeBtn.textContent = t === "dark" ? "☀️" : "🌙";
+        }
+        applyTheme(currentTheme());
+        themeBtn.addEventListener("click", function () {
+            var next = currentTheme() === "dark" ? "light" : "dark";
+            localStorage.setItem("theme", next);
+            applyTheme(next);
+        });
+
+        // Scroll to #line-N from URL hash
+        var targetId = location.hash ? location.hash.slice(1) : null;
+        if (targetId && targetId.startsWith("line-")) {
+            function tryScroll() {
+                var el = document.getElementById(targetId);
+                if (!el) return;
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                el.classList.add("line-highlight");
+                document.removeEventListener("htmx:afterSettle", tryScroll);
+            }
+            tryScroll();
+            document.addEventListener("htmx:afterSettle", tryScroll);
+        }
+    });
+
+    // Update active tab highlight on click
+    document.addEventListener("click", function (e) {
+        var tab = e.target.closest(".tab-btn");
+        if (!tab) return;
+        document.querySelectorAll(".tab-btn").forEach(function (t) { t.classList.remove("active"); });
+        tab.classList.add("active");
+    });
+
+    // Copy JSON to clipboard (event delegation — works before DOMContentLoaded)
+    document.addEventListener("click", function (e) {
+        if (!e.target.classList.contains("copy-btn")) return;
+        var pre = e.target.closest("details").querySelector("pre");
+        if (!pre) return;
+        navigator.clipboard.writeText(pre.textContent).then(function () {
+            var btn = e.target;
+            btn.textContent = "Copied!";
+            setTimeout(function () { btn.textContent = "Copy"; }, 1500);
+        });
+    });
 })();
 """
 
@@ -132,6 +236,7 @@ def _detect_json(line: str) -> tuple[str, str]:
         json_html = (
             '<details class="json-block">'
             f"<summary>{html.escape(summary)}</summary>"
+            '<button class="copy-btn">Copy</button>'
             f"<pre>{html.escape(pretty)}</pre>"
             "</details>"
         )
@@ -152,18 +257,31 @@ def _findall(s: str, ch: str) -> list[int]:
     return positions
 
 
-def _render_line(line: str, line_id: str) -> str:
+def _highlight(text: str, q: str) -> str:
+    """Return HTML-escaped text with case-insensitive matches of q wrapped in <mark>."""
+    if not q:
+        return html.escape(text)
+    parts = []
+    lower_text = text.lower()
+    lower_q = q.lower()
+    start = 0
+    while True:
+        pos = lower_text.find(lower_q, start)
+        if pos < 0:
+            parts.append(html.escape(text[start:]))
+            break
+        parts.append(html.escape(text[start:pos]))
+        parts.append(f"<mark>{html.escape(text[pos : pos + len(q)])}</mark>")
+        start = pos + len(q)
+    return "".join(parts)
+
+
+def _render_line(line: str, line_id: str, q: str = "") -> str:
     line = line.rstrip("\n")
     link = f'<a class="line-link" href="#{line_id}">#</a>'
-    text_part, json_html = _detect_json(line)
-    escaped = html.escape(text_part)
-
-    if len(line) > _FOLD_THRESHOLD:
-        trunc = html.escape(line[:_FOLD_THRESHOLD]) + "..."
-        return (
-            f'<details class="log-line" id="{line_id}"><summary>{link}{trunc}</summary>{escaped}{json_html}</details>\n'
-        )
-    return f'<div class="log-line" id="{line_id}">{link}{escaped}{json_html}</div>\n'
+    _, json_html = _detect_json(line)
+    body = _highlight(line, q)
+    return f'<details class="log-line" id="{line_id}"><summary>{link}{body}</summary>{json_html}</details>\n'
 
 
 # ---------------------------------------------------------------------------
@@ -235,9 +353,7 @@ def _calendar_inner(dir_path: str, month: str) -> str:
 
     base = _u(dir_path)
     cal = _u("_calendar", dir_path)
-    weekday_colors = api_config.get("weekday_colors", {})
     today = datetime.date.today()
-    today_color = api_config.get("today_color", "yellow")
 
     buf = io.StringIO()
     buf.write(
@@ -266,11 +382,12 @@ def _calendar_inner(dir_path: str, month: str) -> str:
     for _, files in ldir.items():
         buf.write("<table><tr>")
         sun = datetime.date(2000, 1, 2)  # a Sunday
+        _WD_CLASS = {5: "wd-5", 6: "wd-6"}  # sat, sun
         for i in range(7):
             wd = sun + datetime.timedelta(days=i)
-            color = weekday_colors.get(wd.weekday())
-            style = f' style="background:{color}"' if color else ""
-            buf.write(f"<th{style}>{wd.strftime('%a')}</th>")
+            cls = _WD_CLASS.get(wd.weekday(), "")
+            attr = f' class="{cls}"' if cls else ""
+            buf.write(f"<th{attr}>{wd.strftime('%a')}</th>")
         buf.write("</tr>")
 
         months = sorted({d[:7] for d in files})
@@ -287,22 +404,22 @@ def _calendar_inner(dir_path: str, month: str) -> str:
                     buf.write("</tr><tr>")
                 dtstr = d.strftime("%Y-%m-%d")
                 if d == today:
-                    color = today_color
+                    cls = "wd-today"
                 else:
-                    color = weekday_colors.get(d.weekday())
-                style = f' style="background:{color}"' if color else ""
+                    cls = _WD_CLASS.get(d.weekday(), "")
+                attr = f' class="{cls}"' if cls else ""
                 if dtstr in files:
                     fp = files[dtstr]
                     cnt_url = _u("_content", fp)
                     push_url = f"{base}?month={month}&date={dtstr}"
                     buf.write(
-                        f"<td{style}>"
+                        f"<td{attr}>"
                         f'<a hx-get="{cnt_url}" hx-target="#log-content"'
                         f' hx-push-url="{push_url}" href="#">{d.day}</a>'
                         f"</td>"
                     )
                 else:
-                    buf.write(f"<td{style}>{d.day}</td>")
+                    buf.write(f"<td{attr}>{d.day}</td>")
                 d += datetime.timedelta(days=1)
             wday = (d.weekday() + 1) % 7
             if wday:
@@ -371,6 +488,7 @@ def _full_page_gen(dirs: list[str], selected: str, month: str, date: str) -> Gen
         "<!DOCTYPE html><html><head>"
         '<meta charset="utf-8">'
         "<title>log viewer</title>"
+        f"<script>{_THEME_INIT}</script>"
         f"<style>{_CSS}</style>"
         '<script src="https://unpkg.com/htmx.org@2" defer></script>'
         f"<script>{_JS}</script>"
@@ -389,6 +507,7 @@ def _full_page_gen(dirs: list[str], selected: str, month: str, date: str) -> Gen
             f' hx-target="#main-area" hx-push-url="{push_url}">'
             f"{html.escape(d)}</a>"
         )
+    yield '<button id="theme-toggle"></button>'
     yield "</div>"
 
     yield '<div id="main-area">'
@@ -466,7 +585,7 @@ def search(
             fp = files[date_str]
             for n, line in enumerate(_iter_lines(fp)):
                 if q.lower() in line.lower():
-                    yield _render_line(line, f"line-{date_str}-{n}")
+                    yield _render_line(line, f"line-{date_str}-{n}", q)
 
     return StreamingResponse(_gen(), media_type="text/html")
 
