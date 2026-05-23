@@ -4,6 +4,7 @@ import io
 import json
 from pathlib import Path
 from typing import Generator
+from urllib.parse import urlencode
 from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse, HTMLResponse
 from .app import uri2file, list_dir, api_config
@@ -477,10 +478,11 @@ def _log_content_gen(file_path: str, offset: int, limit: int) -> Generator[str, 
         count += 1
     if has_more:
         next_offset = offset + count
-        cnt_url = html.escape(_u("_content", file_path), quote=True)
+        query = urlencode({"offset": next_offset, "limit": limit})
+        cnt_url = html.escape(f'{_u("_content", file_path)}?{query}', quote=True)
         yield (
             f'<div class="sentinel"'
-            f' hx-get="{cnt_url}?offset={next_offset}&limit={limit}"'
+            f' hx-get="{cnt_url}"'
             f' hx-trigger="revealed" hx-target="#log-content" hx-swap="beforeend"></div>\n'
         )
 
