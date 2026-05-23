@@ -176,7 +176,7 @@ class TestRenderLine(unittest.TestCase):
 # Endpoint integration tests
 # ---------------------------------------------------------------------------
 
-_RAW_CONTENT = "2024-01-01 INFO hello world\n2024-01-01 INFO {\"key\": \"value\", \"n\": 1}\n"
+_RAW_CONTENT = '2024-01-01 INFO hello world\n2024-01-01 INFO {"key": "value", "n": 1}\n'
 _GZ_CONTENT = gzip.compress(_RAW_CONTENT.encode())
 
 
@@ -247,6 +247,11 @@ class TestHtmxEndpoints(unittest.TestCase):
         self.assertGreater(idx, -1)
         self.assertIn("applog", res.text[idx : idx + 100])
 
+    def test_dir_page_no_month_defaults_to_today(self):
+        res = self.client.get("/htmx/applog")
+        self.assertEqual(200, res.status_code)
+        self.assertIn("applog", res.text)
+
     # --- GET /_main/{dir_path} ---
 
     def test_main_area_status(self):
@@ -267,6 +272,12 @@ class TestHtmxEndpoints(unittest.TestCase):
         # tab click with no date → loads latest available log
         res = self.client.get("/htmx/_main/applog", params={"month": "2024-01"})
         self.assertIn("hello world", res.text)
+
+    def test_main_area_no_month_defaults_to_today(self):
+        # omitting month should not crash and should return a valid page
+        res = self.client.get("/htmx/_main/applog")
+        self.assertEqual(200, res.status_code)
+        self.assertIn("calendar-area", res.text)
 
     # --- GET /_calendar/{dir_path} ---
 
@@ -289,11 +300,15 @@ class TestHtmxEndpoints(unittest.TestCase):
         self.assertIn("この月のファイルなし", res.text)
         self.assertIn("2024-01", res.text)  # link to nearest month with files
 
+    def test_calendar_no_month_defaults_to_today(self):
+        res = self.client.get("/htmx/_calendar/applog")
+        self.assertEqual(200, res.status_code)
+
     def test_calendar_weekday_css_classes(self):
         # Inline color styles must be replaced with CSS classes
         res = self.client.get("/htmx/_calendar/applog", params={"month": "2024-01"})
-        self.assertIn("wd-5", res.text)   # Saturday header
-        self.assertIn("wd-6", res.text)   # Sunday header
+        self.assertIn("wd-5", res.text)  # Saturday header
+        self.assertIn("wd-6", res.text)  # Sunday header
         self.assertNotIn("lightyellow", res.text)
         self.assertNotIn("lightcyan", res.text)
 

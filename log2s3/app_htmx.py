@@ -12,11 +12,12 @@ from logging import getLogger
 
 router = APIRouter()
 _log = getLogger(__name__)
-month_query = Query(pattern="(^[0-9]{4}|all|^$)", default="")
+month_query = Query(pattern="^([0-9]{4}-[0-9]{2}|)$", default="")
 
 _htmx_base = "/htmx"
 _exts = set(stream_ext.keys())
 _PAGE_SIZE = 200
+_WD_CLASS = {5: "wd-5", 6: "wd-6"}  # weekday → CSS class (sat, sun)
 
 
 def update_config(conf: dict):
@@ -317,7 +318,11 @@ def _iter_lines(file_path: str) -> Generator[str, None, None]:
 
 
 def _month_link(cal: str, base: str, m: str, label: str) -> str:
-    return f'<a hx-get="{cal}?month={m}" hx-target="#calendar-area" hx-push-url="{base}?month={m}" href="#">{label}</a>'
+    ecal = html.escape(cal, quote=True)
+    ebase = html.escape(base, quote=True)
+    return (
+        f'<a hx-get="{ecal}?month={m}" hx-target="#calendar-area" hx-push-url="{ebase}?month={m}" href="#">{label}</a>'
+    )
 
 
 def _available_months(dir_path: str) -> list[str]:
@@ -351,7 +356,10 @@ def _calendar_inner(dir_path: str, month: str) -> str:
     """Inner HTML for #calendar-area."""
     ldir = list_dir(dir_path, month)
 
-    dt = datetime.date.fromisoformat(month + "-01")
+    try:
+        dt = datetime.date.fromisoformat(month + "-01")
+    except ValueError:
+        return "<p>(invalid month)</p>"
     prev_m = (dt - datetime.timedelta(days=1)).strftime("%Y-%m")
     next_m = (dt.replace(day=28) + datetime.timedelta(days=4)).replace(day=1).strftime("%Y-%m")
 
@@ -386,7 +394,6 @@ def _calendar_inner(dir_path: str, month: str) -> str:
     for _, files in ldir.items():
         buf.write("<table><tr>")
         sun = datetime.date(2000, 1, 2)  # a Sunday
-        _WD_CLASS = {5: "wd-5", 6: "wd-6"}  # sat, sun
         for i in range(7):
             wd = sun + datetime.timedelta(days=i)
             cls = _WD_CLASS.get(wd.weekday(), "")
@@ -414,8 +421,8 @@ def _calendar_inner(dir_path: str, month: str) -> str:
                 attr = f' class="{cls}"' if cls else ""
                 if dtstr in files:
                     fp = files[dtstr]
-                    cnt_url = _u("_content", fp)
-                    push_url = f"{base}?month={month}&date={dtstr}"
+                    cnt_url = html.escape(_u("_content", fp), quote=True)
+                    push_url = f"{html.escape(base, quote=True)}?month={month}&date={dtstr}"
                     buf.write(
                         f"<td{attr}>"
                         f'<a hx-get="{cnt_url}" hx-target="#log-content"'
@@ -470,7 +477,7 @@ def _log_content_gen(file_path: str, offset: int, limit: int) -> Generator[str, 
         count += 1
     if has_more:
         next_offset = offset + count
-        cnt_url = _u("_content", file_path)
+        cnt_url = html.escape(_u("_content", file_path), quote=True)
         yield (
             f'<div class="sentinel"'
             f' hx-get="{cnt_url}?offset={next_offset}&limit={limit}"'
@@ -503,8 +510,8 @@ def _full_page_gen(dirs: list[str], selected: str, month: str, date: str) -> Gen
     yield '<div id="tabs">'
     for d in dirs:
         cls = "tab-btn active" if d == selected else "tab-btn"
-        main_url = _u("_main", d)
-        push_url = _u(d) + f"?month={month}"
+        main_url = html.escape(_u("_main", d), quote=True)
+        push_url = html.escape(_u(d), quote=True) + f"?month={month}"
         yield (
             f'<a class="{cls}" href="{push_url}"'
             f' hx-get="{main_url}?month={month}"'
