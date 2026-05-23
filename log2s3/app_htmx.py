@@ -441,7 +441,7 @@ def _calendar_inner(dir_path: str, month: str) -> str:
 def _main_inner(dir_path: str, month: str, log_content: str = "") -> str:
     """Inner HTML for #main-area."""
     cal_html = _calendar_inner(dir_path, month)
-    search_url = _u("_search", dir_path)
+    search_url = html.escape(_u("_search", dir_path), quote=True)
     return (
         f'<div id="calendar-area">{cal_html}</div>'
         f'<input id="search" type="text" placeholder="Search..."'
