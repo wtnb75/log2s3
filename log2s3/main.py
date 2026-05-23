@@ -1152,22 +1152,20 @@ def bash(args):
 def serve(prefix, root, host, port, debug):
     """start viewer"""
     from .app import update_config, router
+    from .app_htmx import router as htmx_router, update_config as htmx_update_config
     import uvicorn
     from fastapi import FastAPI
 
-    update_config(
-        {
-            "working_dir": root,
-        }
-    )
+    update_config({"working_dir": root})
     if prefix:
-        update_config(
-            {
-                "prefix": prefix,
-            }
-        )
+        update_config({"prefix": prefix})
+
+    htmx_prefix = (prefix or "") + "/htmx"
+    htmx_update_config({"working_dir": root, "prefix": htmx_prefix})
+
     app = FastAPI(debug=debug)
     app.include_router(router, prefix=prefix)
+    app.include_router(htmx_router, prefix=htmx_prefix)
     uvicorn.run(app, host=host, port=port, log_config=None)
 
 
