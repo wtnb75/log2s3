@@ -479,7 +479,7 @@ def _log_content_gen(file_path: str, offset: int, limit: int) -> Generator[str, 
     if has_more:
         next_offset = offset + count
         query = urlencode({"offset": next_offset, "limit": limit})
-        cnt_url = html.escape(f'{_u("_content", file_path)}?{query}', quote=True)
+        cnt_url = html.escape(f"{_u('_content', file_path)}?{query}", quote=True)
         yield (
             f'<div class="sentinel"'
             f' hx-get="{cnt_url}"'
