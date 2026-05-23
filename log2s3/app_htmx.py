@@ -2,15 +2,17 @@ import datetime
 import html
 import io
 import json
+from pathlib import Path
 from typing import Generator
 from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse, HTMLResponse
-from .app import uri2file, list_dir
+from .app import uri2file, list_dir, api_config
 from .compr_stream import auto_compress_stream, stream_ext
 from logging import getLogger
 
 router = APIRouter()
 _log = getLogger(__name__)
+month_query = Query(pattern="(^[0-9]{4}|all|^$)", default="")
 
 _htmx_base = "/htmx"
 _exts = set(stream_ext.keys())
@@ -297,7 +299,9 @@ def _find_file(file_path: str):
         return target
     candidates = sorted(p for p in target.parent.iterdir() if p.is_file() and p.name.startswith(target.name + "."))
     if candidates:
-        return candidates[0]
+        working_dir = Path(api_config.get("working_dir", ".")).resolve()
+        rel_candidate = str(candidates[0].resolve().relative_to(working_dir))
+        return uri2file(rel_candidate)
     raise HTTPException(status_code=404, detail=f"not found: {file_path}")
 
 
@@ -539,7 +543,7 @@ def index():
 
 
 @router.get("/_main/{dir_path:path}")
-def main_area(dir_path: str, month: str = Query(default="")):
+def main_area(dir_path: str, month: str = month_query):
     if not month:
         month = datetime.date.today().strftime("%Y-%m")
     effective_month, latest_date, latest_fp = _find_latest_file(dir_path, month)
@@ -552,7 +556,7 @@ def main_area(dir_path: str, month: str = Query(default="")):
 
 
 @router.get("/_calendar/{dir_path:path}")
-def calendar_area(dir_path: str, month: str = Query(default="")):
+def calendar_area(dir_path: str, month: str = month_query):
     if not month:
         month = datetime.date.today().strftime("%Y-%m")
     return HTMLResponse(_calendar_inner(dir_path, month))
@@ -574,7 +578,7 @@ def content(
 def search(
     dir_path: str,
     q: str = Query(default=""),
-    month: str = Query(default=""),
+    month: str = month_query,
 ):
     def _gen():
         if not q:
@@ -593,7 +597,7 @@ def search(
 @router.get("/{dir_path:path}")
 def index_dir(
     dir_path: str,
-    month: str = Query(default=""),
+    month: str = month_query,
     date: str = Query(default=""),
 ):
     if not month:
