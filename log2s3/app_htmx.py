@@ -95,6 +95,7 @@ body { font-family: monospace; margin: 0; padding: 0; background: var(--bg); col
 #main-area { padding: 8px; }
 .month-nav { margin-bottom: 8px; }
 .month-nav a { margin: 0 6px; text-decoration: none; color: var(--link); }
+.cal-scroll { overflow-x: auto; }
 table { border-collapse: collapse; margin-bottom: 8px; }
 td, th {
     border: 1px solid var(--border); padding: 2px 8px;
@@ -146,6 +147,16 @@ mark { background: var(--mark-bg); padding: 0 1px; border-radius: 2px; }
 .wd-5 { background: var(--cal-sat); }
 .wd-6 { background: var(--cal-sun); }
 .wd-today { background: var(--cal-today); }
+@media (max-width: 600px) {
+    .tab-btn { padding: 8px 10px; font-size: 14px; }
+    #theme-toggle { padding: 8px 10px; font-size: 14px; }
+    #search { padding: 8px; font-size: 16px; }
+    #log-content { font-size: 13px; }
+    .log-line { padding: 6px 4px; }
+    .line-link { visibility: visible; }
+    td, th { padding: 4px 6px; font-size: 13px; }
+    .copy-btn { padding: 4px 10px; font-size: 12px; }
+}
 """
 
 # Applied synchronously in <head> to avoid flash of unstyled content
@@ -393,7 +404,7 @@ def _calendar_inner(dir_path: str, month: str) -> str:
         return buf.getvalue()
 
     for _, files in ldir.items():
-        buf.write("<table><tr>")
+        buf.write('<div class="cal-scroll"><table><tr>')
         sun = datetime.date(2000, 1, 2)  # a Sunday
         for i in range(7):
             wd = sun + datetime.timedelta(days=i)
@@ -437,7 +448,7 @@ def _calendar_inner(dir_path: str, month: str) -> str:
             if wday:
                 buf.write(f'<td colspan="{7 - wday}"></td>')
             buf.write("</tr>")
-        buf.write("</table>")
+        buf.write("</table></div>")
     return buf.getvalue()
 
 
@@ -500,6 +511,7 @@ def _full_page_gen(dirs: list[str], selected: str, month: str, date: str) -> Gen
     yield (
         "<!DOCTYPE html><html><head>"
         '<meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
         "<title>log viewer</title>"
         f"<script>{_THEME_INIT}</script>"
         f"<style>{_CSS}</style>"
