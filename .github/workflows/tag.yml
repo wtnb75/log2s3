@@ -10,8 +10,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@master
-    - uses: actions/cache@v4
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: _cache
         key: ${{ runner.os }}-pip-${{ github.sha }}
@@ -20,28 +20,28 @@ jobs:
       run: "sudo apt update && sudo apt install -y libsnappy-dev liblzo2-dev"
     - name: versioning
       run: "echo \"VERSION = '${GITHUB_REF##*/v}'\" > log2s3/version.py"
-    - uses: wtnb75/actions/python@main
+    - uses: wtnb75/actions/python@c1711251ea69e3e6d68db7a9fa019d79b497f70c # v1.0.3
       with:
         pipinstall: ".[ext,test] --cache-dir _cache"
-    - uses: wtnb75/actions/ruff@main
-    - uses: wtnb75/actions/pytest@main
+    - uses: wtnb75/actions/ruff@c1711251ea69e3e6d68db7a9fa019d79b497f70c # v1.0.3
+    - uses: wtnb75/actions/pytest@c1711251ea69e3e6d68db7a9fa019d79b497f70c # v1.0.3
     - id: wheel
-      uses: wtnb75/actions/wheel@main
+      uses: wtnb75/actions/wheel@c1711251ea69e3e6d68db7a9fa019d79b497f70c # v1.0.3
     - id: pdoc
-      uses: wtnb75/actions/pdoc@main
+      uses: wtnb75/actions/pdoc@c1711251ea69e3e6d68db7a9fa019d79b497f70c # v1.0.3
       with:
         output-dir: docs
         module: log2s3
-    - uses: docker/setup-qemu-action@v3
+    - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
     - uses: ./.github/actions/pipcache
-    - uses: wtnb75/actions/docker@main
+    - uses: wtnb75/actions/docker@c1711251ea69e3e6d68db7a9fa019d79b497f70c # v1.0.3
       with:
         push: 'true'
         context: .
         username: ${{ github.actor }}
         password: ${{ github.token }}
         image-version: ${{ github.ref_name }}
-    - uses: wtnb75/actions/pypi-upload@main
+    - uses: wtnb75/actions/pypi-upload@c1711251ea69e3e6d68db7a9fa019d79b497f70c # v1.0.3
       with:
         username: ${{ secrets.TWINE_USERNAME }}
         password: ${{ secrets.TWINE_PASSWORD }}
