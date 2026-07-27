@@ -1,9 +1,10 @@
+import os
+import pathlib
+import tempfile
 import unittest
 from datetime import datetime, timedelta
-import tempfile
-import pathlib
-import os
-from log2s3.processor import process_walk, DelProcessor, CompressProcessor
+
+from log2s3.processor import CompressProcessor, DelProcessor, process_walk
 
 
 class TestProcessor(unittest.TestCase):

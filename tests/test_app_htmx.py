@@ -1,8 +1,8 @@
 import datetime
 import gzip
+import tempfile
 import unittest
 from pathlib import Path
-import tempfile
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -15,7 +15,6 @@ from log2s3.app_htmx import (
     router,
     update_config,
 )
-
 
 # ---------------------------------------------------------------------------
 # Pure function tests

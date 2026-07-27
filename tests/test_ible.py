@@ -1,10 +1,12 @@
+import json
+import tempfile
 import unittest
 from unittest.mock import patch
-import tempfile
-import json
-from click.testing import CliRunner
-from log2s3.main import cli
+
 from click.core import UNSET
+from click.testing import CliRunner
+
+from log2s3.main import cli
 
 
 class TestIble(unittest.TestCase):

@@ -1,9 +1,0 @@
-lz4
-Brotli
-pyliblzfse
-zopfli
-python-snappy<0.7
-python-lzo
-pyzpaq
-zlib-ng
-PyYAML

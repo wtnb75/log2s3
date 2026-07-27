@@ -1,12 +1,13 @@
-import lzma
 import bz2
 import gzip
-import pathlib
-from .common_stream import Stream
-from typing import Optional, Callable
-from logging import getLogger
 import io
+import lzma
 import os
+import pathlib
+from collections.abc import Callable
+from logging import getLogger
+
+from .common_stream import Stream
 
 try:
     from mypy_boto3_s3.client import S3Client as S3ClientType
@@ -389,7 +390,7 @@ stream_ext: dict[str, tuple[str, type[Stream], type[Stream]]] = {v[0]: (k, *v[1:
 stream_compress_modes = list(stream_map.keys()) + ["decompress", "raw"]
 
 
-def auto_compress_stream(ifname: pathlib.Path, mode: str, ifp: Optional[Stream] = None) -> tuple[os.PathLike, Stream]:
+def auto_compress_stream(ifname: pathlib.Path, mode: str, ifp: Stream | None = None) -> tuple[os.PathLike, Stream]:
     if ifp is None:
         ifp = FileReadStream(ifname.open("br"))
     if mode == "raw":
