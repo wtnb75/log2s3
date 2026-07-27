@@ -1,11 +1,13 @@
-import unittest
-from datetime import datetime, timedelta
-import tempfile
-import pathlib
+import glob
 import io
 import os
-import glob
+import pathlib
+import tempfile
+import unittest
+from datetime import datetime, timedelta
+
 from click.testing import CliRunner
+
 from log2s3.main import cli
 
 

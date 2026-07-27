@@ -1,25 +1,27 @@
-from logging import getLogger
-import os
-import sys
 import datetime
+import functools
+import io
+import json
+import os
+import pathlib
 import shlex
 import subprocess
-import functools
-import click
-import json
-import pathlib
+import sys
+from collections.abc import Generator
+from logging import getLogger
+
 import boto3
-import io
+import click
 from click.core import UNSET
-from typing import Union, Generator, Optional
-from .version import VERSION
-from .common_stream import Stream, MergeStream
+
+from .common_stream import MergeStream, Stream
 from .compr_stream import (
     S3GetStream,
     S3PutStream,
     auto_compress_stream,
     stream_compress_modes,
 )
+from .version import VERSION
 
 try:
     from mypy_boto3_s3.client import S3Client as S3ClientType
@@ -32,7 +34,7 @@ _log = getLogger(__name__)
 mask_prefix = ["s3_"]
 
 
-def arg_mask(d: Union[list, dict]) -> Union[list, dict]:
+def arg_mask(d: list | dict) -> list | dict:
     if isinstance(d, list):
         return [arg_mask(x) for x in d]
     if isinstance(d, dict):
@@ -200,7 +202,7 @@ def s3_bucket(s3: S3ClientType, bucket_name: str):
     res = s3.list_buckets()
     _log.debug("response %s", res)
     for bkt in res.get("Buckets", []):
-        click.echo("%s %s" % (bkt["CreationDate"], bkt["Name"]))
+        click.echo("{} {}".format(bkt["CreationDate"], bkt["Name"]))
 
 
 def allobjs(s3: S3ClientType, bucket_name: str, prefix: str, marker: str = ""):
@@ -242,7 +244,7 @@ def s3_list(s3: S3ClientType, bucket_name: str, config: dict, top: pathlib.Path)
     if topstr == ".":
         topstr = ""
     for i in allobjs_conf(s3, bucket_name, topstr.lstrip("/"), config):
-        click.echo("%s %6d %s" % (i["LastModified"], i["Size"], i["Key"]))
+        click.echo("{} {:6d} {}".format(i["LastModified"], i["Size"], i["Key"]))
 
 
 @cli.command()
@@ -285,10 +287,10 @@ def s3_du(
                     out[k] = [0, 0]
                 out[k][0] += out[korig][0]
                 out[k][1] += out[korig][1]
-    click.echo("%10s %5s %s" % ("size", "cnt", "name"))
+    click.echo("{:>10} {:>5} {}".format("size", "cnt", "name"))
     click.echo("----------+-----+-----------------------")
     for k, v in sorted(out.items(), key=lambda f: f[1][1], reverse=True):
-        click.echo("%10d %5d %s" % (v[1], v[0], k))
+        click.echo(f"{v[1]:10d} {v[0]:5d} {k}")
 
 
 @cli.command()
@@ -331,12 +333,12 @@ def s3_diff(
     process_walk(top, [lp])
     files = {k.relative_to(top): v for k, v in lp.output if v is not None}
     for k in set(all_keys.keys()) - set(files.keys()):
-        click.echo("only-s3: %s: %s" % (k, all_keys[k]))
+        click.echo(f"only-s3: {k}: {all_keys[k]}")
     for k in set(files.keys()) - set(all_keys.keys()):
-        click.echo("only-file: %s: %s" % (k, files[k]))
+        click.echo(f"only-file: {k}: {files[k]}")
     for k in set(files.keys()) & set(all_keys.keys()):
         if files[k].st_size != all_keys[k].get("Size"):
-            click.echo("size mismatch %s file=%s, obj=%s" % (k, files[k].st_size, all_keys[k]["Size"]))
+            click.echo("size mismatch {} file={}, obj={}".format(k, files[k].st_size, all_keys[k]["Size"]))
 
 
 @cli.command()
@@ -411,7 +413,7 @@ def filetree_list(top: pathlib.Path, config: dict):
 
     lp = ListProcessor(config)
     process_walk(top, [lp])
-    click.echo("%10s %-19s %s    %d(+%d) total" % ("size", "mtime", "name", lp.processed, lp.skipped))
+    click.echo("{:>10} {:<19} {}    {}(+{}) total".format("size", "mtime", "name", lp.processed, lp.skipped))
     click.echo("----------+-------------------+-----------------------")
     for p, st in lp.output:
         if st is None:
@@ -420,7 +422,7 @@ def filetree_list(top: pathlib.Path, config: dict):
         else:
             tmstr = datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
             sz = st.st_size
-        click.echo("%10s %19s %s" % (sz, tmstr, p))
+        click.echo(f"{sz:>10} {tmstr:>19} {p}")
 
 
 @cli.command()
@@ -577,7 +579,7 @@ def s3_less(s3: S3ClientType, bucket_name: str, key: str):
 def s3_vi(s3: S3ClientType, bucket_name: str, key: str, dry):
     """edit compressed object and overwrite"""
     bindata = _s3_read_stream(s3, bucket_name, key).read_all().decode("utf-8")
-    from .compr_stream import stream_ext, RawReadStream
+    from .compr_stream import RawReadStream, stream_ext
 
     _, ext = os.path.splitext(key)
     if ext in stream_ext:
@@ -637,7 +639,7 @@ def s3_del(s3: S3ClientType, bucket_name: str, keys: list[str], dry):
     """delete objects"""
     for k in keys:
         res = s3.head_object(Bucket=bucket_name, Key=k)
-        click.echo("%s %s %s" % (res["LastModified"], res["ContentLength"], k))
+        click.echo("{} {} {}".format(res["LastModified"], res["ContentLength"], k))
     if dry:
         _log.info("(dry) delete %s keys", len(keys))
     else:
@@ -666,7 +668,7 @@ def s3_list_parts(s3: S3ClientType, bucket_name: str, cleanup):
     if len(res.get("Uploads", [])) == 0:
         click.echo("(no in-progress multipart uploads found)")
     for upl in res.get("Uploads", []):
-        click.echo("%s %s %s" % (upl["Initiated"], upl["UploadId"], upl["Key"]))
+        click.echo("{} {} {}".format(upl["Initiated"], upl["UploadId"], upl["Key"]))
         if cleanup:
             _log.info("cleanup %s/%s", upl["Key"], upl["UploadId"])
             s3.abort_multipart_upload(Bucket=bucket_name, Key=upl["Key"], UploadId=upl["UploadId"])
@@ -708,7 +710,7 @@ def view_file(filename: str):
 @verbose_option
 def edit_file(filename: str, dry):
     """edit compressed file and overwrite"""
-    from .compr_stream import stream_ext, RawReadStream
+    from .compr_stream import RawReadStream, stream_ext
 
     fname = pathlib.Path(filename)
     _, data = auto_compress_stream(fname, "decompress")
@@ -757,7 +759,8 @@ def compress_benchmark(compress, file):
     """
     import csv
     import timeit
-    from .compr_stream import stream_map, stream_compress_modes, RawReadStream, Stream
+
+    from .compr_stream import RawReadStream, Stream, stream_compress_modes, stream_map
 
     if not compress:
         compress = stream_compress_modes
@@ -824,8 +827,9 @@ def traefik_json_convert(file, nth, format):
         --accesslog.fields.defaultmode=keep \\
         --accesslog.fields.headers.defaultmode=keep
     """
-    from .compr_stream import FileReadStream, auto_compress_stream
     from collections import defaultdict
+
+    from .compr_stream import FileReadStream, auto_compress_stream
 
     common = (
         "%(ClientHost)s - %(ClientUsername)s [%(httptime)s]"
@@ -878,7 +882,7 @@ def do_ible1(name: str, fn: click.Command, args: dict, dry: bool):
     _log.info("end %s", name)
 
 
-def convert_ible(data: Union[list[dict], dict]) -> list[dict]:
+def convert_ible(data: list[dict] | dict) -> list[dict]:
     if isinstance(data, dict):
         d = []
         _log.debug("convert %s", arg_mask(data))
@@ -922,12 +926,12 @@ def ible_gen(
 ) -> Generator[tuple[str, click.Command, dict, dict], None, None]:
     _log.debug("input: %s", arg_mask(data))
     if not isinstance(data, list):
-        raise Exception(f"invalid list style: {type(data)}")
+        raise TypeError(f"invalid list style: {type(data)}")
     baseparam = {}
     for v in data:
         _log.debug("exec %s", arg_mask(v))
         if not isinstance(v, dict):
-            raise Exception(f"invalid dict style: {type(v)}")
+            raise TypeError(f"invalid dict style: {type(v)}")
         kw: set[str] = v.keys() - {"name", "allow-fail"}
         if len(kw) != 1:
             raise Exception(f"invalid command style: {kw}")
@@ -935,7 +939,7 @@ def ible_gen(
         args: dict = v[cmd]
         name: str = v.get("name", cmd)
         if not isinstance(args, dict):
-            raise Exception(f"invalid args: {args}")
+            raise TypeError(f"invalid args: {args}")
         if cmd == "params":
             baseparam.update(args)
             continue
@@ -958,7 +962,7 @@ def do_ible(data: list[dict], dry: bool):
             _log.info("failed. continue: %s", e)
 
 
-def gen_sh(file: str) -> Generator[tuple[Optional[str], list[str]], None, None]:
+def gen_sh(file: str) -> Generator[tuple[str | None, list[str]], None, None]:
     with open(file, "r") as fp:
         name = None
         for line in fp:
@@ -981,7 +985,7 @@ def gen_sh(file: str) -> Generator[tuple[Optional[str], list[str]], None, None]:
 
 
 def sh_line2arg(cmdop: click.Command, tokens: list[str]) -> tuple[dict, bool]:
-    args: dict[str, Union[str, bool]] = {}
+    args: dict[str, str | bool] = {}
     allow_fail = False
     if tokens[-2:] == ["||", "true"]:
         allow_fail = True
@@ -1038,7 +1042,7 @@ def read_sh(file: str) -> list[dict]:
     return res
 
 
-def try_read(file: str) -> Union[list[dict], dict]:
+def try_read(file: str) -> list[dict] | dict:
     try:
         import tomllib
 
@@ -1087,7 +1091,7 @@ def sh_dump(data, output):
         fnname: str = fn.name or name
         options: list[str] = [fnname]
         for k, v in sorted(args.items()):
-            opt = [x for x in fn.params if x.name == k][0]
+            opt = next(x for x in fn.params if x.name == k)
             if opt.default == v:
                 continue
             if isinstance(v, bool):
@@ -1151,10 +1155,12 @@ def bash(args):
 @click.option("--debug/--no-debug", default=False, show_default=True)
 def serve(prefix, root, host, port, debug):
     """start viewer"""
-    from .app import update_config, router
-    from .app_htmx import router as htmx_router, update_config as htmx_update_config
     import uvicorn
     from fastapi import FastAPI
+
+    from .app import router, update_config
+    from .app_htmx import router as htmx_router
+    from .app_htmx import update_config as htmx_update_config
 
     update_config({"working_dir": root})
     if prefix:

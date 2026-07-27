@@ -1,15 +1,17 @@
+import datetime
 import os
 import pathlib
-import time
 import shutil
-from click.core import UNSET
-from logging import getLogger
-from typing import Optional, Sequence
+import time
 from abc import ABC, abstractmethod
-from .compr_stream import auto_compress_stream, FileWriteStream, S3PutStream
-import pytimeparse
+from collections.abc import Sequence
+from logging import getLogger
+
 import humanfriendly
-import datetime
+import pytimeparse
+from click.core import UNSET
+
+from .compr_stream import FileWriteStream, S3PutStream, auto_compress_stream
 
 try:
     from mypy_boto3_s3.client import S3Client as S3ClientType
@@ -21,7 +23,9 @@ _log = getLogger(__name__)
 
 
 class FileProcessor(ABC):
-    def __init__(self, config: dict = {}):
+    def __init__(self, config: dict | None = None):
+        if config is None:
+            config = {}
         self.config = {k: v for k, v in config.items() if v is not None}
         self.processed = 0
         self.skipped = 0
@@ -60,21 +64,29 @@ class FileProcessor(ABC):
         return True
 
     def check_name(self, fname: pathlib.Path) -> bool:
-        if "suffix" in self.config and self.config["suffix"] != UNSET:
-            if not str(fname).endswith(self.config["suffix"]):
-                return False
-        if "prefix" in self.config and self.config["prefix"] != UNSET:
-            if not str(fname).startswith(self.config["prefix"]):
-                return False
-        if "glob" in self.config and self.config["glob"] != UNSET:
-            if not fname.match(self.config["glob"]):
-                return False
-        if "iglob" in self.config and self.config["iglob"] != UNSET:
-            if not fname.match(self.config["iglob"], case_sensitive=False):
-                return False
+        if (
+            "suffix" in self.config
+            and self.config["suffix"] != UNSET
+            and not str(fname).endswith(self.config["suffix"])
+        ):
+            return False
+        if (
+            "prefix" in self.config
+            and self.config["prefix"] != UNSET
+            and not str(fname).startswith(self.config["prefix"])
+        ):
+            return False
+        if "glob" in self.config and self.config["glob"] != UNSET and not fname.match(self.config["glob"]):
+            return False
+        if (
+            "iglob" in self.config
+            and self.config["iglob"] != UNSET
+            and not fname.match(self.config["iglob"], case_sensitive=False)
+        ):
+            return False
         return True
 
-    def check(self, fname: pathlib.Path, stat: Optional[os.stat_result]) -> bool:
+    def check(self, fname: pathlib.Path, stat: os.stat_result | None) -> bool:
         if stat is None:
             stat = fname.stat()
         res = self.check_date_range(stat.st_mtime) and self.check_size_range(stat.st_size) and self.check_name(fname)
@@ -85,33 +97,33 @@ class FileProcessor(ABC):
         return res
 
     @abstractmethod
-    def process(self, fname: pathlib.Path, stat: Optional[os.stat_result]) -> bool:
+    def process(self, fname: pathlib.Path, stat: os.stat_result | None) -> bool:
         raise NotImplementedError()
 
 
 class DebugProcessor(FileProcessor):
-    def check(self, fname: pathlib.Path, stat: Optional[os.stat_result]) -> bool:
+    def check(self, fname: pathlib.Path, stat: os.stat_result | None) -> bool:
         res = super().check(fname, stat)
         _log.debug("debug: fname=%s, stat=%s -> %s / %s", fname, stat, res, self.config)
         return res
 
-    def process(self, fname: pathlib.Path, stat: Optional[os.stat_result]) -> bool:
+    def process(self, fname: pathlib.Path, stat: os.stat_result | None) -> bool:
         _log.info("debug: fname=%s, stat=%s", fname, stat)
         return False
 
 
 class ListProcessor(FileProcessor):
-    def __init__(self, config: dict = {}):
+    def __init__(self, config: dict | None = None):
         super().__init__(config)
-        self.output: list[tuple[pathlib.Path, Optional[os.stat_result]]] = []
+        self.output: list[tuple[pathlib.Path, os.stat_result | None]] = []
 
-    def process(self, fname: pathlib.Path, stat: Optional[os.stat_result]) -> bool:
+    def process(self, fname: pathlib.Path, stat: os.stat_result | None) -> bool:
         self.output.append((fname, stat))
         return False
 
 
 class DelProcessor(FileProcessor):
-    def process(self, fname: pathlib.Path, stat: Optional[os.stat_result]) -> bool:
+    def process(self, fname: pathlib.Path, stat: os.stat_result | None) -> bool:
         if self.config.get("dry", False):
             _log.info("(dry) delete fname=%s, stat=%s", fname, stat)
         else:
@@ -126,7 +138,7 @@ class CompressProcessor(FileProcessor):
         self.before_total = 0
         self.after_total = 0
 
-    def process(self, fname: pathlib.Path, stat: Optional[os.stat_result]) -> bool:
+    def process(self, fname: pathlib.Path, stat: os.stat_result | None) -> bool:
         compressor = self.config.get("compress", "gzip")
         newname, data = auto_compress_stream(fname, compressor)
         newpath = pathlib.Path(newname)
@@ -183,7 +195,7 @@ class S3Processor(FileProcessor):
         self.top = config["top"]
         self.uploaded = 0
 
-    def process(self, fname: pathlib.Path, stat: Optional[os.stat_result]) -> bool:
+    def process(self, fname: pathlib.Path, stat: os.stat_result | None) -> bool:
         compressor = self.config.get("compress", "gzip")
         newname, data = auto_compress_stream(fname, compressor)
         newpath = pathlib.Path(newname)
@@ -198,7 +210,7 @@ class S3Processor(FileProcessor):
         rest2 = str(base_name)[len(common_name) :]
         reststr = ""
         if rest1 != rest2:
-            reststr = "{%s,%s}" % (rest1, rest2)
+            reststr = f"{{{rest1},{rest2}}}"
         if isinstance(stat, os.stat_result):
             before_sz = stat.st_size
         else:

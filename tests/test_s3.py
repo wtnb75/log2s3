@@ -1,7 +1,9 @@
-import unittest
 import datetime
+import unittest
+from unittest.mock import ANY, MagicMock, patch
+
 from click.testing import CliRunner
-from unittest.mock import patch, MagicMock, ANY
+
 from log2s3.main import cli
 
 now = datetime.datetime.now()

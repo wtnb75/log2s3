@@ -1,5 +1,5 @@
 import io
-from typing import Generator, Sequence
+from collections.abc import Generator, Sequence
 from logging import getLogger
 
 _log = getLogger(__name__)

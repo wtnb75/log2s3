@@ -15,27 +15,33 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-      with:
-        path: _cache
-        key: ${{ runner.os }}-pip-${{ github.sha }}
-        restore-keys: ${{ runner.os }}-pip-
     - name: prepare
       run: "sudo apt update && sudo apt install -y libsnappy-dev liblzo2-dev"
-    - uses: wtnb75/actions/python@c1711251ea69e3e6d68db7a9fa019d79b497f70c # v1.0.3
+    - uses: wtnb75/actions/python@9789197715f5a6b54a25832ce27193be50662266 # v1.0.4
       with:
-        pipinstall: ".[ext,test] --cache-dir _cache"
-    - uses: wtnb75/actions/ruff@c1711251ea69e3e6d68db7a9fa019d79b497f70c # v1.0.3
-    - uses: wtnb75/actions/pytest@c1711251ea69e3e6d68db7a9fa019d79b497f70c # v1.0.3
-    - uses: wtnb75/actions/wheel@c1711251ea69e3e6d68db7a9fa019d79b497f70c # v1.0.3
+        extra-args: "--extra ext --extra test"
+    - uses: wtnb75/actions/ruff@9789197715f5a6b54a25832ce27193be50662266 # v1.0.4
+    - uses: wtnb75/actions/pytest@9789197715f5a6b54a25832ce27193be50662266 # v1.0.4
+    - uses: wtnb75/actions/wheel@9789197715f5a6b54a25832ce27193be50662266 # v1.0.4
     - id: pdoc
-      uses: wtnb75/actions/pdoc@c1711251ea69e3e6d68db7a9fa019d79b497f70c # v1.0.3
+      uses: wtnb75/actions/pdoc@9789197715f5a6b54a25832ce27193be50662266 # v1.0.4
       with:
         output-dir: docs
         module: log2s3
     - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
-    - uses: ./.github/actions/pipcache
-    - uses: wtnb75/actions/merge-pages@c1711251ea69e3e6d68db7a9fa019d79b497f70c # v1.0.3
+    - name: cache pip
+      shell: bash
+      run: |
+        pip download -d _cache --cache-dir _cache ".[ext]"
+        sudo chown -R root. _cache
+        for pf in linux/{amd64,arm64}; do
+          docker run --platform $pf --rm -v $PWD:/w -w /w python:3-alpine sh -c "apk add --no-cache lzo-dev snappy-dev gcc g++ ; pip wheel -w _cache --cache-dir _cache --find-links _cache '.[ext]'"
+        done
+        sudo chown -R $(id -u):$(id -g) _cache
+    - name: show cache
+      run: pip cache list --cache-dir _cache
+      shell: bash
+    - uses: wtnb75/actions/merge-pages@9789197715f5a6b54a25832ce27193be50662266 # v1.0.4
       with:
         dirs: "cover docs"
         #pydist: dist
@@ -44,7 +50,7 @@ jobs:
     - name: deploy pages
       uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
       id: deployment
-    - uses: wtnb75/actions/docker@c1711251ea69e3e6d68db7a9fa019d79b497f70c # v1.0.3
+    - uses: wtnb75/actions/docker@9789197715f5a6b54a25832ce27193be50662266 # v1.0.4
       with:
         push: 'true'
         context: .

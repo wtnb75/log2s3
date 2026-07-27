@@ -1,0 +1,107 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "log2s3"
+dynamic = ["version"]
+description = "log directory management CLI utility"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [
+    { name = "Watanabe Takashi", email = "wtnb75@gmail.com" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: System :: Networking",
+    "Programming Language :: Python :: 3",
+]
+dependencies = [
+    "click",
+    "boto3<1.36",
+    "python-dotenv",
+    "pytimeparse",
+    "humanfriendly",
+    "fastapi",
+    "uvicorn",
+]
+
+[project.optional-dependencies]
+ext = [
+    "lz4",
+    "Brotli",
+    "pyliblzfse",
+    "zopfli",
+    "python-snappy<0.7",
+    "python-lzo",
+    "pyzpaq",
+    "zlib-ng",
+    "PyYAML",
+]
+test = [
+    "httpx",
+]
+
+[project.scripts]
+log2s3 = "log2s3.main:cli"
+
+[project.urls]
+Homepage = "https://github.com/wtnb75/log2s3"
+
+[tool.hatch.version]
+path = "log2s3/version.py"
+pattern = "VERSION = ['\"](?P<version>[^'\"]+)['\"]"
+
+[tool.hatch.build.targets.wheel]
+packages = ["log2s3"]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "pytest-github-actions-annotate-failures",
+    "ruff",
+    "pdoc",
+]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+# DTZ005/DTZ006/DTZ007/DTZ011: all naive-datetime call sites are local
+# filesystem mtimes, CLI display timestamps, or the hugo-style content
+# viewer's "current month/today" navigation (app.py/app_htmx.py) - naive
+# local time is intentional here, none of these values are stored or
+# compared across timezones, so timezone-awareness is not a real bug.
+# TRY002: the log2s3-ible playbook parser (main.py) raises plain Exception
+# for various "invalid X" input-validation failures that are meant to
+# propagate as a generic failure to the CLI/`do_ible` caller - no caller
+# expects a specific exception type there (the three cases that are
+# genuine isinstance type checks were changed to TypeError instead).
+# BLE001: `do_ible` in main.py intentionally catches bare Exception around
+# each playbook step so it can implement per-step `allow-fail` semantics
+# regardless of what the step's own command raises.
+# PLW1510: the `sh`/`bash` passthrough subcommands in main.py are thin
+# `subprocess.run` wrappers with no explicit check= by design (their exit
+# status handling predates this migration and is out of scope here).
+# SIM103: the ruff-suggested one-liner for check_name's last condition
+# collapses into a line that blows past line-length and hurts readability
+# compared to the explicit early-return form, so it's kept as-is.
+ignore = ["DTZ005", "DTZ006", "DTZ007", "DTZ011", "TRY002", "BLE001", "PLW1510", "SIM103"]
+
+[tool.ruff.lint.per-file-ignores]
+# RUF012: unittest.TestCase class attributes here are read-only fixture data
+# (never mutated), not function default arguments, so they don't share the
+# B006 mutable-default-argument bug class.
+# SIM115: test_stream.py's setUp/tearDown tempfile objects have a lifetime
+# deferred across several test methods, so they can't be collapsed into a
+# single `with` block without restructuring.
+"tests/*" = ["RUF012", "SIM115"]
+
+[tool.pytest.ini_options]
+testpaths = ["."]
+python_files = ["test_*.py"]
+addopts = "--cov-report=html:cover --cov-report=term --cov-branch --cov-reset --cov=log2s3 --doctest-modules"

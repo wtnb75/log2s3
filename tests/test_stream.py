@@ -1,16 +1,17 @@
+import gzip
+import lzma
+import pathlib
+import tempfile
 import unittest
 from unittest.mock import ANY
-import tempfile
-import lzma
-import gzip
-import pathlib
+
 from log2s3.compr_stream import (
     FileReadStream,
     FileWriteStream,
     RawReadStream,
-    stream_map,
-    auto_compress_stream,
     S3PutStream,
+    auto_compress_stream,
+    stream_map,
 )
 
 

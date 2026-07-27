@@ -1,13 +1,15 @@
 import datetime
 import html
 import io
-from typing import Any
-from pathlib import Path
-from fastapi import APIRouter, HTTPException, Response, Header, Query
-from fastapi.responses import StreamingResponse
-from .common_stream import Stream, MergeStream, CatStream
-from .compr_stream import auto_compress_stream, stream_ext
 from logging import getLogger
+from pathlib import Path
+from typing import Any
+
+from fastapi import APIRouter, Header, HTTPException, Query, Response
+from fastapi.responses import StreamingResponse
+
+from .common_stream import CatStream, MergeStream, Stream
+from .compr_stream import auto_compress_stream, stream_ext
 
 router = APIRouter()
 _log = getLogger(__name__)
@@ -29,10 +31,11 @@ def update_config(conf: dict):
 def uri2file(file_path: str) -> Path:
     working_dir = Path(api_config.get("working_dir", "."))
     target = (working_dir / file_path).resolve()
-    if working_dir.resolve().absolute() not in target.resolve().absolute().parents:
-        if not (target.exists() and target.samefile(working_dir)):
-            _log.warning("out of path: wdir=%s, target=%s", working_dir, target.resolve())
-            raise HTTPException(status_code=403, detail=f"cannot access to {file_path}")
+    if working_dir.resolve().absolute() not in target.resolve().absolute().parents and not (
+        target.exists() and target.samefile(working_dir)
+    ):
+        _log.warning("out of path: wdir=%s, target=%s", working_dir, target.resolve())
+        raise HTTPException(status_code=403, detail=f"cannot access to {file_path}")
     return target
 
 
@@ -228,7 +231,7 @@ def html2_gen(ldir: dict[str, dict[str, str]], file_path: str, current_month: st
     buf.write(f"<html><title>{file_path}</title><body>")
     if current_month in ("", "all"):
         current_month = datetime.date.today().strftime("%Y-%m")
-    today = datetime.date.strptime(current_month, "%Y-%m")
+    today = datetime.datetime.strptime(current_month, "%Y-%m").date()
     lastm = today - datetime.timedelta(days=1)
     nextm = today + datetime.timedelta(days=31)
     fmt = "%Y-%m"
@@ -254,7 +257,7 @@ def html2_gen(ldir: dict[str, dict[str, str]], file_path: str, current_month: st
             else:
                 buf.write(f"<th><code>{wdstr}</code></th>")
         buf.write("</tr>")
-        months = {x.rsplit("-", 1)[0] for x in files.keys()}
+        months = {x.rsplit("-", 1)[0] for x in files}
         for month in sorted(months):
             buf.write(html2_gen1(uri, month, files))
         buf.write("</table></div>")
@@ -278,16 +281,14 @@ def html2(file_path: str, month=month_query):
 
 def find_target(p: Path, accepts: list[str]) -> Path:
     # gzip pass through
-    if "gzip" in accepts:
-        if p.with_suffix(p.suffix + ".gz").is_file():
-            return p.with_suffix(p.suffix + ".gz")
+    if "gzip" in accepts and p.with_suffix(p.suffix + ".gz").is_file():
+        return p.with_suffix(p.suffix + ".gz")
     # raw pass through
     if p.is_file():
         return p
     # others
-    if "br" in accepts:
-        if p.with_suffix(p.suffix + ".br").exists():
-            return p.with_suffix(p.suffix + ".br")
+    if "br" in accepts and p.with_suffix(p.suffix + ".br").exists():
+        return p.with_suffix(p.suffix + ".br")
     # compressed case
     target_compressed = [x for x in p.parent.iterdir() if x.is_file() and x.name.startswith(p.name + ".")]
     if len(target_compressed):
@@ -297,7 +298,7 @@ def find_target(p: Path, accepts: list[str]) -> Path:
 
 def get_streams(files: dict[str, dict[str, str]], accepts: list[str]) -> tuple[list[Stream], dict]:
     outputs: dict[str, list[str]] = {}
-    for _, v in files.items():
+    for v in files.values():
         for k, fn in v.items():
             if k not in outputs:
                 outputs[k] = []

@@ -2,14 +2,16 @@ import datetime
 import html
 import io
 import json
-from pathlib import Path
-from typing import Generator
-from urllib.parse import urlencode
-from fastapi import APIRouter, Query
-from fastapi.responses import StreamingResponse, HTMLResponse
-from .app import uri2file, list_dir, api_config
-from .compr_stream import auto_compress_stream, stream_ext
+from collections.abc import Generator
 from logging import getLogger
+from pathlib import Path
+from urllib.parse import urlencode
+
+from fastapi import APIRouter, Query
+from fastapi.responses import HTMLResponse, StreamingResponse
+
+from .app import api_config, list_dir, uri2file
+from .compr_stream import auto_compress_stream, stream_ext
 
 router = APIRouter()
 _log = getLogger(__name__)
@@ -403,7 +405,7 @@ def _calendar_inner(dir_path: str, month: str) -> str:
             buf.write("<p>この月のファイルなし &nbsp; " + " &nbsp; ".join(parts) + "</p>")
         return buf.getvalue()
 
-    for _, files in ldir.items():
+    for files in ldir.values():
         buf.write('<div class="cal-scroll"><table><tr>')
         sun = datetime.date(2000, 1, 2)  # a Sunday
         for i in range(7):
