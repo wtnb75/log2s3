@@ -12,7 +12,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - name: prepare
+      run: "sudo apt update && sudo apt install -y libsnappy-dev liblzo2-dev"
     - uses: wtnb75/actions/python@v1
+      with:
+        extra-args: "--extra ext --extra test"
     - uses: wtnb75/actions/pyupdate@v1
       with:
         test-args: "-xs"
