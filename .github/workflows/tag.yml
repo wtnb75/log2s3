@@ -15,15 +15,15 @@ jobs:
       run: "sudo apt update && sudo apt install -y libsnappy-dev liblzo2-dev"
     - name: versioning
       run: "echo \"VERSION = '${GITHUB_REF##*/v}'\" > log2s3/version.py"
-    - uses: wtnb75/actions/python@9789197715f5a6b54a25832ce27193be50662266 # v1.0.4
+    - uses: wtnb75/actions/python@v1
       with:
         extra-args: "--extra ext --extra test"
-    - uses: wtnb75/actions/ruff@9789197715f5a6b54a25832ce27193be50662266 # v1.0.4
-    - uses: wtnb75/actions/pytest@9789197715f5a6b54a25832ce27193be50662266 # v1.0.4
+    - uses: wtnb75/actions/ruff@v1
+    - uses: wtnb75/actions/pytest@v1
     - id: wheel
-      uses: wtnb75/actions/wheel@9789197715f5a6b54a25832ce27193be50662266 # v1.0.4
+      uses: wtnb75/actions/wheel@v1
     - id: pdoc
-      uses: wtnb75/actions/pdoc@9789197715f5a6b54a25832ce27193be50662266 # v1.0.4
+      uses: wtnb75/actions/pdoc@v1
       with:
         output-dir: docs
         module: log2s3
@@ -40,7 +40,7 @@ jobs:
     - name: show cache
       run: pip cache list --cache-dir _cache
       shell: bash
-    - uses: wtnb75/actions/docker@9789197715f5a6b54a25832ce27193be50662266 # v1.0.4
+    - uses: wtnb75/actions/docker@v1
       with:
         push: 'true'
         context: .
