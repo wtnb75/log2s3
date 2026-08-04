@@ -48,7 +48,7 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ github.token }}
         image-version: ${{ github.ref_name }}
-    - uses: wtnb75/actions/pypi-upload@9789197715f5a6b54a25832ce27193be50662266 # v1.0.4
+    - uses: wtnb75/actions/pypi-upload@v1
       with:
         username: ${{ secrets.TWINE_USERNAME }}
         password: ${{ secrets.TWINE_PASSWORD }}

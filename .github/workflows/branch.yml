@@ -36,7 +36,7 @@ jobs:
     - name: show cache
       run: pip cache list --cache-dir _cache
       shell: bash
-    - uses: wtnb75/actions/merge-pages@9789197715f5a6b54a25832ce27193be50662266 # v1.0.4
+    - uses: wtnb75/actions/merge-pages@v1
       with:
         dirs: "cover docs"
         #pydist: dist
