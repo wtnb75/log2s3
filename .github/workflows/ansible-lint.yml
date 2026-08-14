@@ -4,6 +4,7 @@ on:
     branches-ignore: [main, gh-pages]
     paths:
       - ansible
+      - .github/workflows/ansible-lint.yml
   workflow_dispatch:
 
 jobs:
